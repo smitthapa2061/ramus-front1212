@@ -324,8 +324,8 @@ const TopFragger: React.FC<TopFraggerProps> = ({ tournament, round }) => {
     },
     {
       img: "/theme4assets/totaldamages.png",
-      primaryValue: "TOTAL DAMAGE",
-      secondaryValue: topPlayer?.numericDamage || 0,
+      primaryValue: "AVG DAMAGE",
+secondaryValue: topPlayer?.numericDamage?.toFixed(2) || "0.00",
     },
     {
       img: "/theme4assets/total elims.png",
