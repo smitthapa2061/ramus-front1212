@@ -1,8 +1,9 @@
 import React, { useState, useEffect, ChangeEvent, FormEvent, useCallback, useMemo, useDeferredValue, useTransition, startTransition } from 'react';
 import { flushSync } from 'react-dom';
 import axios from 'axios';
-import { FaTrash, FaEdit, FaDiscord, FaWhatsapp } from 'react-icons/fa';
+import { FaTrash, FaEdit, FaDiscord, FaWhatsapp, FaUpload } from 'react-icons/fa';
 import api from '../login/api.tsx';
+import { uploadToCloudinary } from '../utils/cloudinaryUpload.tsx';
 
 interface Player {
   _id?: string;
@@ -32,7 +33,9 @@ const TeamForm = React.memo(({
   removePlayerInput,
   handleSubmit,
   editingTeamId,
-  resetForm
+  resetForm,
+  handleLogoUpload,
+  handlePlayerPhotoUpload
 }: {
   form: { teamFullName: string; teamTag: string; logo: string };
   setForm: React.Dispatch<React.SetStateAction<{ teamFullName: string; teamTag: string; logo: string }>>;
@@ -45,6 +48,8 @@ const TeamForm = React.memo(({
   handleSubmit: (e: FormEvent) => void;
   editingTeamId: string | null;
   resetForm: () => void;
+  handleLogoUpload: (e: ChangeEvent<HTMLInputElement>) => void;
+  handlePlayerPhotoUpload: (index: number, e: ChangeEvent<HTMLInputElement>) => void;
 }) => {
   return (
     <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 mb-8 shadow-xl">
@@ -71,13 +76,16 @@ const TeamForm = React.memo(({
           required
           className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
         />
+        <label htmlFor="modal-team-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
+          <FaUpload size={16} />
+          Upload Team Logo
+        </label>
         <input
-          type="text"
-          name="logo"
-          placeholder="Team Logo URL"
-          value={form.logo}
-          onChange={handleTeamInputChange}
-          className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+          id="modal-team-logo-upload"
+          type="file"
+          accept="image/*"
+          onChange={handleLogoUpload}
+          className="hidden"
         />
         {form.logo && (
           <img
@@ -85,6 +93,7 @@ const TeamForm = React.memo(({
             alt="Logo Preview"
             className="w-24 h-24 object-contain my-2 rounded-lg border border-slate-600"
             loading="lazy"
+            onError={(e) => e.currentTarget.src = './logo.png'}
           />
         )}
 
@@ -108,14 +117,26 @@ const TeamForm = React.memo(({
               onChange={(e) => handlePlayerChange(index, e)}
               className="px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all w-36"
             />
+            <label htmlFor={`player-photo-${index}`} className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-40">
+              <FaUpload size={10} />
+              Upload photo
+            </label>
             <input
-              type="text"
-              name="photo"
-              placeholder="Photo URL (optional)"
-              value={player.photo}
-              onChange={(e) => handlePlayerChange(index, e)}
-              className="px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all w-40"
+              id={`player-photo-${index}`}
+              type="file"
+              accept="image/*"
+              onChange={(e) => handlePlayerPhotoUpload(index, e)}
+              className="hidden"
             />
+            {player.photo && (
+              <img
+                src={player.photo}
+                alt="Player Photo Preview"
+                className="w-12 h-12 rounded-full object-cover border-2 border-slate-600"
+                loading="lazy"
+                onError={(e) => e.currentTarget.src = './def_char.png'}
+              />
+            )}
             {playersForm.length > 1 && (
               <button
                 type="button"
@@ -208,6 +229,7 @@ const PlayerRow = React.memo(({
             alt={player.playerName}
             className="w-7 h-7 rounded-full object-cover border-2 border-slate-600"
             loading="lazy"
+            onError={(e) => e.currentTarget.src = './def_char.png'}
           />
         )}
         <span className="text-gray-300">
@@ -272,6 +294,7 @@ const TeamCard = React.memo(({
           alt={`${team.teamFullName} logo`}
           className="w-20 h-20 object-contain mb-3 mx-auto rounded-lg"
           loading="lazy"
+          onError={(e) => e.currentTarget.src = './logo.png'}
         />
       )}
       <h4 className="font-bold text-white text-center text-lg mb-1">
@@ -378,6 +401,32 @@ const FormContainer = React.memo(({
     setPlayersForm((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const handleLogoUpload = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await uploadToCloudinary(file, "teams/logos", "team_logo");
+      setForm((prev) => ({ ...prev, logo: url }));
+    } catch (err) {
+      alert("Upload failed");
+    }
+  }, []);
+
+  const handlePlayerPhotoUpload = useCallback(async (index: number, e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await uploadToCloudinary(file, "players/photos", "player_photo");
+      setPlayersForm((prev) => {
+        const copy = [...prev];
+        copy[index] = { ...copy[index], photo: url };
+        return copy;
+      });
+    } catch (err) {
+      alert("Upload failed");
+    }
+  }, []);
+
   const handleSubmit = useCallback(async (e: FormEvent) => {
     e.preventDefault();
 
@@ -468,13 +517,16 @@ const FormContainer = React.memo(({
                 required
                 className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
               />
+              <label htmlFor="team-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all">
+                <FaUpload size={16} />
+                Upload Team Logo
+              </label>
               <input
-                type="text"
-                name="logo"
-                placeholder="Team Logo URL"
-                value={form.logo}
-                onChange={handleTeamInputChange}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                id="team-logo-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="hidden"
               />
               {form.logo && (
                 <img
@@ -487,7 +539,7 @@ const FormContainer = React.memo(({
 
               <h4 className="font-semibold text-purple-400 mt-4 text-sm uppercase tracking-wider">Players</h4>
               {playersForm.map((player, index) => (
-                <div key={player._id || index} className="flex gap-2 items-center bg-slate-900/30 p-3 rounded-lg border border-slate-700/30">
+                <div key={player._id || index} className="flex gap-2 items-center bg-slate-900/30 p-3 rounded-lg border border-slate-700/30 mb-2">
                   <input
                     type="text"
                     name="playerName"
@@ -505,14 +557,26 @@ const FormContainer = React.memo(({
                     onChange={(e) => handlePlayerChange(index, e)}
                     className="px-3 py-2 bg-slate-800 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all w-24 text-sm"
                   />
+                  <label htmlFor={`modal-player-photo-${index}`} className="flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-700 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-28 text-sm">
+                    <FaUpload size={12} />
+                    Upload
+                  </label>
                   <input
-                    type="text"
-                    name="photo"
-                    placeholder="Photo URL"
-                    value={player.photo}
-                    onChange={(e) => handlePlayerChange(index, e)}
-                    className="px-3 py-2 bg-slate-800 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all w-28 text-sm"
+                    id={`modal-player-photo-${index}`}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handlePlayerPhotoUpload(index, e)}
+                    className="hidden"
                   />
+                  {player.photo && (
+                    <img
+                      src={player.photo}
+                      alt="Player Photo Preview"
+                      className="w-10 h-10 rounded-full object-cover border-2 border-slate-600"
+                      loading="lazy"
+                      onError={(e) => e.currentTarget.src = './def_char.png'}
+                    />
+                  )}
                   {playersForm.length > 1 && (
                     <button
                       type="button"
@@ -559,7 +623,7 @@ const FormContainer = React.memo(({
   // Show inline form for creating new team
   return (
     <div style={{ display: showForm ? 'block' : 'none' }}>
-      <TeamForm form={form} setForm={setForm} playersForm={playersForm} setPlayersForm={setPlayersForm} handleTeamInputChange={handleTeamInputChange} handlePlayerChange={handlePlayerChange} addPlayerInput={addPlayerInput} removePlayerInput={removePlayerInput} handleSubmit={handleSubmit} editingTeamId={editingTeamId} resetForm={resetForm} />
+      <TeamForm form={form} setForm={setForm} playersForm={playersForm} setPlayersForm={setPlayersForm} handleTeamInputChange={handleTeamInputChange} handlePlayerChange={handlePlayerChange} addPlayerInput={addPlayerInput} removePlayerInput={removePlayerInput} handleSubmit={handleSubmit} editingTeamId={editingTeamId} resetForm={resetForm} handleLogoUpload={handleLogoUpload} handlePlayerPhotoUpload={handlePlayerPhotoUpload} />
     </div>
   );
 });

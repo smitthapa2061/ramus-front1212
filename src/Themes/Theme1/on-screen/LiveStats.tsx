@@ -67,6 +67,7 @@ const LiveStats: React.FC<LiveStatsProps> = ({ tournament, round, match, matchDa
   const [socketStatus, setSocketStatus] = useState<string>('disconnected');
   const [updateCount, setUpdateCount] = useState<number>(0);
   const [overallMap, setOverallMap] = useState<Map<string, any>>(new Map());
+  const [localOverallData, setLocalOverallData] = useState<any>(overallData || null);
 
   useEffect(() => {
     if (matchData) {
@@ -260,6 +261,12 @@ const LiveStats: React.FC<LiveStatsProps> = ({ tournament, round, match, matchDa
         }
       },
 
+      handleOverallDataUpdate: (data: any) => {
+        console.log('LiveStats: Received overallDataUpdate:', data);
+        setLocalOverallData(data);
+        setLastUpdateTime(Date.now());
+      },
+
       handleConnect: () => {
         console.log('LiveStats: Socket connected');
         setSocketStatus('connected');
@@ -278,6 +285,7 @@ const LiveStats: React.FC<LiveStatsProps> = ({ tournament, round, match, matchDa
     freshSocket.on('teamPointsUpdated', liveStatsHandlers.handleTeamPointsUpdate);
     freshSocket.on('teamStatsUpdated', liveStatsHandlers.handleTeamStatsUpdate);
     freshSocket.on('bulkTeamUpdate', liveStatsHandlers.handleBulkTeamUpdate);
+    freshSocket.on('overallDataUpdate', liveStatsHandlers.handleOverallDataUpdate);
     freshSocket.on('connect', liveStatsHandlers.handleConnect);
     freshSocket.on('disconnect', liveStatsHandlers.handleDisconnect);
 
@@ -293,6 +301,7 @@ const LiveStats: React.FC<LiveStatsProps> = ({ tournament, round, match, matchDa
       freshSocket.off('teamPointsUpdated', liveStatsHandlers.handleTeamPointsUpdate);
       freshSocket.off('teamStatsUpdated', liveStatsHandlers.handleTeamStatsUpdate);
       freshSocket.off('bulkTeamUpdate', liveStatsHandlers.handleBulkTeamUpdate);
+      freshSocket.off('overallDataUpdate', liveStatsHandlers.handleOverallDataUpdate);
       freshSocket.off('connect', liveStatsHandlers.handleConnect);
       freshSocket.off('disconnect', liveStatsHandlers.handleDisconnect);
       // Notify socket manager that this component is done with the socket
@@ -309,11 +318,19 @@ const LiveStats: React.FC<LiveStatsProps> = ({ tournament, round, match, matchDa
     }
   }, [matchData, matchDataId]);
 
-  // Use overall data from props
+  // Handle overallData prop changes
   useEffect(() => {
-    if (overallData && Array.isArray(overallData.teams) && match?.matchNo !== 1) {
+    if (overallData) {
+      console.log('OverallData prop changed, updating local state');
+      setLocalOverallData(overallData);
+    }
+  }, [overallData]);
+
+  // Use overall data from local state
+  useEffect(() => {
+    if (localOverallData && Array.isArray(localOverallData.teams)) {
       const map = new Map<string, any>();
-      for (const t of overallData.teams) {
+      for (const t of localOverallData.teams) {
         const key = t.teamId?.toString?.() || t.teamId;
         if (!key) continue;
         map.set(key, {
@@ -325,7 +342,7 @@ const LiveStats: React.FC<LiveStatsProps> = ({ tournament, round, match, matchDa
     } else {
       setOverallMap(new Map());
     }
-  }, [overallData, match?.matchNo]);
+  }, [localOverallData]);
 
   // Sort teams by points first, then by kills - recalculated on every localMatchData change
   const sortedTeams = useMemo(() => {
@@ -341,7 +358,7 @@ const LiveStats: React.FC<LiveStatsProps> = ({ tournament, round, match, matchDa
         const overallKills = overall && Array.isArray(overall.players)
           ? overall.players.reduce((s: number, p: any) => s + (p.killNum || 0), 0)
           : 0;
-        const totalPoints = (match?.matchNo === 1 ? 0 : (overall?.placePoints || 0)) + (team.placePoints || 0) + liveKills + (match?.matchNo === 1 ? 0 : overallKills);
+        const totalPoints = (overall?.placePoints || 0) + overallKills;
         const isAllDead = team.players.every(player => player.liveState === 5 || player.bHasDied);
 
         return {

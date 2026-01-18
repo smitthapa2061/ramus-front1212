@@ -133,11 +133,10 @@ const Match: React.FC = () => {
         groups: groups.filter((g) => selectedGroupIds.includes(g._id)),
       };
 
-      setMatches((prev) => {
-        const updated = [...prev, addedMatch];
-        matchesCache.current[`${tournamentId}-${roundId}`] = updated;
-        return updated;
-      });
+      // Clear frontend cache
+      delete matchesCache.current[`${tournamentId}-${roundId}`];
+
+      setMatches((prev) => [...prev, addedMatch]);
 
       setNewMatchNo(newMatchNo + 1);
       setNewTime('00:00');
@@ -171,11 +170,10 @@ const Match: React.FC = () => {
         groupIds: selectedGroupIds, // Assuming groups might be editable in future, but keeping simple for now
       });
 
-      setMatches((prev) => {
-        const updated = prev.map((m) => (m._id === matchId ? res.data : m));
-        matchesCache.current[`${tournamentId}-${roundId}`] = updated;
-        return updated;
-      });
+      // Clear frontend cache
+      delete matchesCache.current[`${tournamentId}-${roundId}`];
+
+      setMatches((prev) => prev.map((m) => (m._id === matchId ? res.data : m)));
 
       setEditMatchId(null);
     } catch (err: any) {
@@ -190,11 +188,10 @@ const Match: React.FC = () => {
     try {
       await api.delete(`/tournaments/${tournamentId}/rounds/${roundId}/matches/${matchId}`);
 
-      setMatches((prev) => {
-        const updated = prev.filter((m) => m._id !== matchId);
-        matchesCache.current[`${tournamentId}-${roundId}`] = updated;
-        return updated;
-      });
+      // Clear frontend cache
+      delete matchesCache.current[`${tournamentId}-${roundId}`];
+
+      setMatches((prev) => prev.filter((m) => m._id !== matchId));
     } catch (err: any) {
       alert(err.message || 'Error deleting match');
     }

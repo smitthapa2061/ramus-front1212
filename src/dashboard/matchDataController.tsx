@@ -11,7 +11,7 @@ const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, baseDela
     try {
       return await fn();
     } catch (error: any) {
-      if (error.response?.status === 429 && attempt < maxRetries - 1) {
+      if ((error.response?.status === 429 || error.response?.status === 500) && attempt < maxRetries - 1) {
         const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
@@ -77,6 +77,7 @@ const MatchDataViewer: React.FC = () => {
 
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const matchCacheRef = useRef<Record<string, any>>({});
+  const lastUpdateRef = useRef<Record<string, number>>({});
   const setTeamRef = (id: string) => (el: HTMLDivElement | null) => {
     if (el) teamRefs.current[id] = el;
   };
@@ -205,14 +206,19 @@ const MatchDataViewer: React.FC = () => {
 
   // Create batchers for different types of updates with proper accumulators
   const killUpdateBatcher = useRef(new UpdateBatcher<{ change: number }>(
-    800, // Increased from 200ms to reduce rate limiting
+    3000, // Significantly increased to prevent rapid requests
     (existing, newUpdate) => ({ change: existing.change + newUpdate.change })
   ));
-  const pointsUpdateBatcher = useRef(new UpdateBatcher<{ points: number }>(1000)); // Increased from 300ms
-  const deathUpdateBatcher = useRef(new UpdateBatcher<{ bHasDied: boolean }>(600)); // Increased from 150ms
+  const pointsUpdateBatcher = useRef(new UpdateBatcher<{ points: number }>(4000)); // Significantly increased
+  const deathUpdateBatcher = useRef(new UpdateBatcher<{ bHasDied: boolean }>(2500)); // Significantly increased
 
   const updateKillCount = async (teamIndex: number, playerIndex: number, change: number) => {
     if (!matchData) return;
+
+    const now = Date.now();
+    const key = `${teamIndex}-${playerIndex}`;
+    if (lastUpdateRef.current[key] && now - lastUpdateRef.current[key] < 200) return;
+    lastUpdateRef.current[key] = now;
 
     const team = matchData.teams[teamIndex];
     const player = team.players[playerIndex];
@@ -263,6 +269,11 @@ const MatchDataViewer: React.FC = () => {
 
   const savePlacePoints = async (teamId: string, teamIndex: number, newPoints: number) => {
     if (!matchData) return;
+
+    const now = Date.now();
+    const key = `${teamId}-points`;
+    if (lastUpdateRef.current[key] && now - lastUpdateRef.current[key] < 300) return;
+    lastUpdateRef.current[key] = now;
 
     // Update local state immediately
     setMatchData((prevData: any) => {
@@ -447,6 +458,11 @@ const MatchDataViewer: React.FC = () => {
   const togglePlayerDeath = async (teamIndex: number, playerIndex: number) => {
     if (!matchData) return;
 
+    const now = Date.now();
+    const key = `${teamIndex}-${playerIndex}-death`;
+    if (lastUpdateRef.current[key] && now - lastUpdateRef.current[key] < 250) return;
+    lastUpdateRef.current[key] = now;
+
     const team = matchData.teams[teamIndex];
     const player = team.players[playerIndex];
     const newBHasDied = !player.bHasDied;
@@ -484,6 +500,11 @@ const MatchDataViewer: React.FC = () => {
   // Toggle all players in a team using bulk update with request queue
   const toggleAllPlayersDeath = async (teamIndex: number) => {
     if (!matchData) return;
+
+    const now = Date.now();
+    const key = `team-${teamIndex}-all-death`;
+    if (lastUpdateRef.current[key] && now - lastUpdateRef.current[key] < 500) return;
+    lastUpdateRef.current[key] = now;
 
     const team = matchData.teams[teamIndex];
     const newValue = !team.players.every((p: Player) => p.bHasDied);

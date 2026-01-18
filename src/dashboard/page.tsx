@@ -1,14 +1,14 @@
 import React, { useState, ChangeEvent, FormEvent, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FaEdit, FaTrash, FaDiscord } from "react-icons/fa";
+import { FaEdit, FaTrash, FaDiscord, FaUpload } from "react-icons/fa";
 import api from "../login/api"; // Axios instance with withCredentials
 import { socket } from "./socket"; // socket instance
 import { setCache, getCache, removeCache } from "./cache"; // ✅ caching utils
+import { uploadToCloudinary } from '../utils/cloudinaryUpload.tsx';
 
 interface TournamentFormState {
   tournamentName: string;
   torLogo: string;
-  day: string;
   primaryColor: string;
   secondaryColor: string;
   overlayBg: string;
@@ -18,7 +18,6 @@ interface Tournament {
   _id: string;
   tournamentName: string;
   torLogo: string;
-  day: string;
   primaryColor: string;
   secondaryColor: string;
   overlayBg: string;
@@ -32,7 +31,6 @@ const Dashboard: React.FC = () => {
   const [form, setForm] = useState<TournamentFormState>({
     tournamentName: "",
     torLogo: "",
-    day: "",
     primaryColor: "",
     secondaryColor: "",
     overlayBg: "",
@@ -43,6 +41,17 @@ const Dashboard: React.FC = () => {
   const [editForm, setEditForm] = useState<Partial<Tournament>>({});
   const [user, setUser] = useState<any>(null);
   const navigate = useNavigate();
+
+  const handleTorLogoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await uploadToCloudinary(file, "tournaments/logos", "team_logo");
+      setForm((prev) => ({ ...prev, torLogo: url }));
+    } catch (err) {
+      alert("Upload failed");
+    }
+  };
 
   // --- Auth check (cached) ---
   const checkAuth = async () => {
@@ -136,7 +145,6 @@ const Dashboard: React.FC = () => {
       setForm({
         tournamentName: "",
         torLogo: "",
-        day: "",
         primaryColor: "",
         secondaryColor: "",
         overlayBg: "",
@@ -283,10 +291,39 @@ const Dashboard: React.FC = () => {
           <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 mb-8 shadow-xl max-w-2xl">
             <h3 className="text-xl font-bold text-white mb-4">Create New Tournament</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <input
+                  type="text"
+                  name="tournamentName"
+                  placeholder="Tournament Name"
+                  value={form.tournamentName}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                />
+              </div>
+              <div>
+                <label htmlFor="tournament-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
+                  <FaUpload size={16} />
+                  Upload Tournament Logo
+                </label>
+                <input
+                  id="tournament-logo-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleTorLogoUpload}
+                  className="hidden"
+                />
+                {form.torLogo && (
+                  <img
+                    src={form.torLogo}
+                    alt="Tournament Logo Preview"
+                    className="w-24 h-24 object-contain my-2 rounded-lg border border-slate-600"
+                    loading="lazy"
+                    onError={(e) => e.currentTarget.src = './logo.png'}
+                  />
+                )}
+              </div>
               {[
-                { name: "tournamentName", placeholder: "Tournament Name" },
-                { name: "torLogo", placeholder: "Tournament Logo URL" },
-                { name: "day", placeholder: "Tournament Day" },
                 { name: "primaryColor", placeholder: "Primary Color (e.g., #ffffff)" },
                 { name: "secondaryColor", placeholder: "Secondary Color (e.g., #000000)" },
                 { name: "overlayBg", placeholder: "Overlay Background (e.g., #1a1a1a)" },
@@ -326,7 +363,48 @@ const Dashboard: React.FC = () => {
           <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 mb-8 shadow-xl max-w-2xl">
             <h3 className="text-xl font-bold text-white mb-4">Edit Tournament</h3>
             <form onSubmit={handleEditSubmit} className="space-y-4">
-              {["tournamentName", "torLogo", "day", "primaryColor", "secondaryColor", "overlayBg"].map(
+              <div>
+                <input
+                  type="text"
+                  name="tournamentName"
+                  value={editForm.tournamentName || ""}
+                  onChange={handleEditChange}
+                  placeholder="Tournament Name"
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-tournament-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
+                  <FaUpload size={16} />
+                  Upload Tournament Logo
+                </label>
+                <input
+                  id="edit-tournament-logo-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const url = await uploadToCloudinary(file, "tournaments/logos", "team_logo");
+                      setEditForm((prev) => ({ ...prev, torLogo: url }));
+                    } catch (err) {
+                      alert("Upload failed");
+                    }
+                  }}
+                  className="hidden"
+                />
+                {editForm.torLogo && (
+                  <img
+                    src={editForm.torLogo}
+                    alt="Tournament Logo Preview"
+                    className="w-24 h-24 object-contain my-2 rounded-lg border border-slate-600"
+                    loading="lazy"
+                    onError={(e) => e.currentTarget.src = './logo.png'}
+                  />
+                )}
+              </div>
+              {["primaryColor", "secondaryColor", "overlayBg"].map(
                 (field) => (
                   <div key={field}>
                     <input
@@ -401,11 +479,6 @@ const Dashboard: React.FC = () => {
                     >
                       {t.tournamentName}
                     </h3>
-                    {t.day && (
-                      <p className="text-sm text-gray-400">
-                        {t.day}
-                      </p>
-                    )}
                   </div>
 
                   {/* Color Preview */}

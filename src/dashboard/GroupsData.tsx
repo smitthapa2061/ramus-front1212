@@ -6,6 +6,8 @@ import api from "../login/api.tsx"; // Axios instance with withCredentials
 interface Team {
   _id: string;
   teamFullName: string;
+  teamTag: string;
+  logo?: string;
 }
 
 interface Slot {
@@ -240,7 +242,8 @@ const Group = React.forwardRef<GroupRef, GroupProps>(({ onSelectionChange }, ref
 
   const filteredTeams = useMemo(() => {
     return teams.filter((team) =>
-      team.teamFullName.toLowerCase().includes(searchTerm.toLowerCase())
+      team.teamFullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      team.teamTag.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [teams, searchTerm]);
 
@@ -286,7 +289,7 @@ const Group = React.forwardRef<GroupRef, GroupProps>(({ onSelectionChange }, ref
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Type to filter..."
+                  placeholder="Search by team name or tag..."
                   className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                 />
               </div>
@@ -325,7 +328,17 @@ const Group = React.forwardRef<GroupRef, GroupProps>(({ onSelectionChange }, ref
                       const team = teams.find((team) => team._id === t.teamId);
                       return (
                         <div key={t.teamId} className="flex items-center justify-between p-2 bg-slate-700/30 rounded-md mb-1 border border-slate-700/50">
-                          <span className="text-gray-200 text-sm truncate flex-1 mr-2">{team?.teamFullName}</span>
+                          <div className="flex items-center flex-1 mr-2">
+                            {team?.logo && (
+                              <img
+                                src={team.logo}
+                                alt={`${team.teamFullName} logo`}
+                                className="w-8 h-8 rounded-full object-cover mr-3 border border-slate-600"
+                                loading="lazy"
+                              />
+                            )}
+                            <span className="text-gray-200 text-sm truncate">{team?.teamFullName}</span>
+                          </div>
                           <input
                             type="number"
                             min={1}
@@ -400,12 +413,20 @@ const Group = React.forwardRef<GroupRef, GroupProps>(({ onSelectionChange }, ref
                   </summary>
 
                   <div className="px-6 py-4 bg-slate-950/30 border-t border-slate-800">
-                    <ul className="list-disc list-inside space-y-1 text-gray-400">
+                    <ul className="space-y-1 text-gray-400">
                       {group.slots && group.slots.length > 0 ? (
                         group.slots
                           .sort((a, b) => a.slot - b.slot)
                           .map((slot) => (
-                            <li key={slot._id}>
+                            <li key={slot._id} className="flex items-center">
+                              {slot.team?.logo && (
+                                <img
+                                  src={slot.team.logo}
+                                  alt={`${slot.team.teamFullName} logo`}
+                                  className="w-6 h-6 rounded-full object-cover mr-2 border border-slate-600"
+                                  loading="lazy"
+                                />
+                              )}
                               <span className="text-gray-300">{slot.team ? slot.team.teamFullName : "Unknown Team"}</span>
                               <span className="text-purple-500 ml-2 text-sm font-mono">(Slot {slot.slot})</span>
                             </li>
@@ -442,3 +463,4 @@ const Group = React.forwardRef<GroupRef, GroupProps>(({ onSelectionChange }, ref
 });
 
 export default Group;
+
