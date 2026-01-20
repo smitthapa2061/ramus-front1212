@@ -3,25 +3,18 @@ import React, { useState } from 'react';
 interface Tournament {
   _id: string;
   tournamentName: string;
-  torLogo?: string;
-  day?: string;
   primaryColor?: string;
-  secondaryColor?: string;
-  overlayBg?: string;
 }
 
 interface Round {
   _id: string;
   roundName: string;
-  apiEnable?: boolean;
-  day?:string
+  day?: string;
 }
 
 interface Match {
   _id: string;
-  matchName?: string;
   matchNo?: number;
-  _matchNo?: number;
 }
 
 interface Player {
@@ -29,7 +22,6 @@ interface Player {
   playerName: string;
   killNum: number;
   bHasDied: boolean;
-  picUrl?: string;
   health: number;
   healthMax: number;
   liveState: number;
@@ -37,9 +29,7 @@ interface Player {
 
 interface Team {
   _id: string;
-  teamId?: string;
   teamTag: string;
-  slot?: number;
   placePoints: number;
   players: Player[];
   teamLogo: string;
@@ -57,9 +47,15 @@ interface SlotsProps {
   matchData?: MatchData | null;
 }
 
-const Slots: React.FC<SlotsProps> = ({ tournament, round, match, matchData }) => {
-  
- 
+const Slots: React.FC<SlotsProps> = ({
+  tournament,
+  round,
+  match,
+  matchData,
+}) => {
+  /* ================= CONTROLS ================= */
+  const [rows, setRows] = useState(8);
+  const [cols, setCols] = useState(8);
 
   if (!matchData || !matchData.teams) {
     return (
@@ -68,105 +64,180 @@ const Slots: React.FC<SlotsProps> = ({ tournament, round, match, matchData }) =>
       </div>
     );
   }
-const boxW = 200; // desired width
-const boxH = 200; // desired height
- const cols = 8;
-  const teams = matchData.teams;
-  const rows = 8;
+
+  /* ================= CONSTANTS ================= */
+  const BASE_BOX_W = 200;
+  const BASE_BOX_H = 200;
+
+  const GAP_X = 20;
+  const GAP_Y = 40;
+
+  const GRID_MAX_WIDTH = 1720; // inside 1920
+  const GRID_MAX_HEIGHT = 730;
+
+  /* ================= AUTO SCALE ================= */
+  const scaleX =
+    (GRID_MAX_WIDTH - GAP_X * (cols - 1)) /
+    (BASE_BOX_W * cols);
+
+  const scaleY =
+    (GRID_MAX_HEIGHT - GAP_Y * (rows - 1)) /
+    (BASE_BOX_H * rows);
+
+  const scale = Math.min(1, scaleX, scaleY);
+
+  const boxW = Math.floor(BASE_BOX_W * scale);
+  const boxH = Math.floor(BASE_BOX_H * scale);
+
+  /* ================= DATA ================= */
   const totalSlots = rows * cols;
-  const slots = Array.from({ length: totalSlots }, (_, i) => i < teams.length ? teams[i] : null);
+  const slots = Array.from({ length: totalSlots }, (_, i) =>
+    i < matchData.teams.length ? matchData.teams[i] : null
+  );
 
+  return (
+    <div className="flex flex-col items-center">
 
+      {/* ================= 1920x1080 CANVAS ================= */}
+      <div className="w-[1920px] h-[1080px] relative overflow-hidden">
 
- return (
-  <div className="w-[1920px] h-[1080px]  ">
-    <div
-  style={{
-   backgroundImage: `linear-gradient(135deg, ${
-  tournament.primaryColor || '#000'
-}, #000)`,
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-  }}
-  className="w-[1800px] h-[250px] text-[142px] font-[agencyb] absolute left-[140px]"
->
- TEAM PARTICIPATE
+        {/* Title */}
+        <div
+          className="absolute left-[140px] top-0 text-[142px] font-[agencyb]"
+          style={{
+            backgroundImage: `linear-gradient(135deg, ${tournament.primaryColor ?? '#FFF700'}, #000)`,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
+        >
+          TEAM PARTICIPATE
+        </div>
 
-  
-</div>
-<div
- style={{
-   backgroundImage: `linear-gradient(135deg, ${
-  tournament.primaryColor || '#000'
-}, #000)`,
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-  }}
-className="text-[78px] font-[agencyb] absolute left-[1340px] top-[0px]">
-    {round?.roundName}
-  </div>
-<div className='text-black w-[400px] h-[200px] text-[78px] font-[agencyb] absolute left-[1310px] top-[70px]'>
-DAY {round?.day} MATCH {match?.matchNo}
+        <div
+          className="absolute left-[1340px] top-[0px] text-[78px] font-[agencyb]"
+          style={{
+            backgroundImage: `linear-gradient(135deg, ${tournament.primaryColor ?? '#FFF700'}, #000)`,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
+        >
+          {round?.roundName}
+        </div>
 
-</div>
+        <div className="absolute left-[1310px] top-[70px] text-black text-[78px] font-[agencyb]">
+          DAY {round?.day} MATCH {match?.matchNo}
+        </div>
 
+        {/* Grid */}
+        <div
+          className="grid absolute top-[280px] left-[100px]"
+          style={{
+            gridTemplateColumns: `repeat(${cols}, ${boxW}px)`,
+            gridAutoRows: `${boxH}px`,
+            columnGap: GAP_X,
+            rowGap: GAP_Y,
+          }}
+        >
+          {slots.map((team, index) =>
+            team ? (
+              <svg
+                key={index}
+                width={boxW}
+                height={boxH}
+                viewBox={`0 0 ${boxW} ${boxH}`}
+              >
+                <defs>
+                  <clipPath id={`clip_${index}`}>
+                    <path
+                      d={`
+                        M ${boxW * 0.125},0
+                        Q 0,0 0,${boxH * 0.167}
+                        L 0,${boxH}
+                        L ${boxW},${boxH}
+                        L ${boxW},0 Z
+                      `}
+                    />
+                  </clipPath>
 
-<div
-  className="grid absolute top-[280px] left-[100px]"
-  style={{
-    gridTemplateColumns: `repeat(${cols}, ${boxW}px)`, // fixed width per column
-    gridAutoRows: `${boxH}px`, // fixed height per row
-    columnGap: '20px',  // horizontal spacing
-    rowGap: '40px',     // vertical spacing
-  }}
->
-  {slots.map((team, index) => {
-    if (!team) return null;
+                  <linearGradient
+                    id={`grad_${index}`}
+                    x1="0"
+                    y1="0"
+                    x2={boxW}
+                    y2={boxH}
+                  >
+                    <stop offset="0%" stopColor={tournament.primaryColor ?? '#FFF700'} />
+                    <stop offset="100%" stopColor="#000" />
+                  </linearGradient>
+                </defs>
 
-    return (
-      <svg
-      
-        key={index}
-        viewBox={`0 0 ${boxW} ${boxH}`}
-        width={boxW}
-        height={boxH}
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <defs>
-        <clipPath id={`cutTopLeft_${index}`}>
-  <path 
-    d={`
-      M ${boxW * 0.125},0 
-      Q 0,0 0,${boxH * 0.167} 
-      L 0,${boxH} 
-      L ${boxW},${boxH} 
-      L ${boxW},0 
-      Z
-    `}
-  />
-</clipPath>
-          <linearGradient id={`paint0_linear_${index}`} x1="0" y1="0" x2={boxW} y2={boxH} gradientUnits="userSpaceOnUse">
-            <stop stopColor="#FFF700"/>
-            <stop offset="1"/>
-          </linearGradient>
-        </defs>
+                <rect
+                  width={boxW}
+                  height={boxH}
+                  fill="white"
+                  clipPath={`url(#clip_${index})`}
+                />
 
-        <rect x="0" y="0" width={boxW} height={boxH} fill="white" stroke="black" clipPath={`url(#cutTopLeft_${index})`} />
-        <rect x="0" y={boxH - 43} width={boxW} height="53" fill={`url(#paint0_linear_${index})`} />
-        <image x="20" y="10" width={boxW-30} height={boxH-50} href={team.teamLogo || "/def_logo.png"} clipPath={`url(#cutTopLeft_${index})`} />
-        <text x={boxW / 2} y={boxH - 10} textAnchor="middle" fontSize="34" fill="white" fontFamily="AGENCYB">
-      {team.teamTag}
-        </text>
-      </svg>
-    );
-  })}
-</div>
+                <rect
+                  y={boxH * 0.72}
+                  width={boxW}
+                  height={boxH * 0.28}
+                  fill={`url(#grad_${index})`}
+                />
 
+                <image
+                  href={team.teamLogo || '/def_logo.png'}
+                  x={boxW * 0.1}
+                  y={boxH * 0.05}
+                  width={boxW * 0.8}
+                  height={boxH * 0.65}
+                  clipPath={`url(#clip_${index})`}
+                />
 
+                <text
+                  x={boxW / 2}
+                  y={boxH - 10}
+                  textAnchor="middle"
+                  fill="white"
+                  fontSize={Math.max(12, boxW * 0.17)}
+                  fontFamily="AGENCYB"
+                >
+                  {team.teamTag}
+                </text>
+              </svg>
+            ) : null
+          )}
+        </div>
+      </div>
 
-  </div>
-);
+      {/* ================= CONTROLS (BELOW 1920x1080) ================= */}
+      <div className="mt-6 flex gap-6 bg-black text-white px-6 py-4 rounded-lg">
+        <div>
+          <label className="block text-sm">Rows</label>
+          <input
+            type="number"
+            min={1}
+            max={12}
+            value={rows}
+            onChange={(e) => setRows(Number(e.target.value))}
+            className="w-[80px] px-2 py-1 text-black"
+          />
+        </div>
 
+        <div>
+          <label className="block text-sm">Columns</label>
+          <input
+            type="number"
+            min={1}
+            max={12}
+            value={cols}
+            onChange={(e) => setCols(Number(e.target.value))}
+            className="w-[80px] px-2 py-1 text-black"
+          />
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Slots;

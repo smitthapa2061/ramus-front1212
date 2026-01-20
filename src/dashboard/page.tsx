@@ -39,6 +39,7 @@ const Dashboard: React.FC = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
   const [editForm, setEditForm] = useState<Partial<Tournament>>({});
+  const [showEditModal, setShowEditModal] = useState(false);
   const [user, setUser] = useState<any>(null);
   const navigate = useNavigate();
 
@@ -163,6 +164,7 @@ const Dashboard: React.FC = () => {
     if (tournament) {
       setEditingTournament(tournament);
       setEditForm(tournament);
+      setShowEditModal(true);
     }
   };
 
@@ -187,6 +189,7 @@ const Dashboard: React.FC = () => {
       setTournaments(updated);
       setCache(CACHE_KEY_BASE, updated);
       setEditingTournament(null);
+      setShowEditModal(false);
       alert("Tournament updated successfully");
     } catch (err: any) {
       console.error("Edit error:", err.response?.data?.message || err.message);
@@ -224,9 +227,9 @@ const Dashboard: React.FC = () => {
                 className="w-[70px] h-[70px] rounded-lg shadow-lg"
               />
               <div>
-              <h1 className="text-[1rem] font-bold text-white">ESPORTS MANAGEMENT</h1>
-               <h1 className="text-[1rem] font-bold text-white">AND OVERLAY SOFTWARE</h1>
-               </div>
+                <h1 className="text-[1rem] font-bold text-white">ESPORTS MANAGEMENT</h1>
+                <h1 className="text-[1rem] font-bold text-white">AND OVERLAY SOFTWARE</h1>
+              </div>
             </div>
 
             {/* Navigation Buttons */}
@@ -358,85 +361,6 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* --- Edit Form --- */}
-        {editingTournament && (
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 mb-8 shadow-xl max-w-2xl">
-            <h3 className="text-xl font-bold text-white mb-4">Edit Tournament</h3>
-            <form onSubmit={handleEditSubmit} className="space-y-4">
-              <div>
-                <input
-                  type="text"
-                  name="tournamentName"
-                  value={editForm.tournamentName || ""}
-                  onChange={handleEditChange}
-                  placeholder="Tournament Name"
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-tournament-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
-                  <FaUpload size={16} />
-                  Upload Tournament Logo
-                </label>
-                <input
-                  id="edit-tournament-logo-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    try {
-                      const url = await uploadToCloudinary(file, "tournaments/logos", "team_logo");
-                      setEditForm((prev) => ({ ...prev, torLogo: url }));
-                    } catch (err) {
-                      alert("Upload failed");
-                    }
-                  }}
-                  className="hidden"
-                />
-                {editForm.torLogo && (
-                  <img
-                    src={editForm.torLogo}
-                    alt="Tournament Logo Preview"
-                    className="w-24 h-24 object-contain my-2 rounded-lg border border-slate-600"
-                    loading="lazy"
-                    onError={(e) => e.currentTarget.src = './logo.png'}
-                  />
-                )}
-              </div>
-              {["primaryColor", "secondaryColor", "overlayBg"].map(
-                (field) => (
-                  <div key={field}>
-                    <input
-                      type="text"
-                      name={field}
-                      value={(editForm as any)[field] || ""}
-                      onChange={handleEditChange}
-                      placeholder={field.replace(/([A-Z])/g, " $1").trim()}
-                      className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    />
-                  </div>
-                )
-              )}
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  className="bg-green-600 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  Save Changes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingTournament(null)}
-                  className="bg-slate-700 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
         {/* --- Tournament List --- */}
         {tournaments.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -516,6 +440,90 @@ const Dashboard: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* --- Edit Modal --- */}
+      {showEditModal && editingTournament && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-white mb-4">Edit Tournament</h3>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <input
+                  type="text"
+                  name="tournamentName"
+                  value={editForm.tournamentName || ""}
+                  onChange={handleEditChange}
+                  placeholder="Tournament Name"
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-tournament-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
+                  <FaUpload size={16} />
+                  Upload Tournament Logo
+                </label>
+                <input
+                  id="edit-tournament-logo-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const url = await uploadToCloudinary(file, "tournaments/logos", "team_logo");
+                      setEditForm((prev) => ({ ...prev, torLogo: url }));
+                    } catch (err) {
+                      alert("Upload failed");
+                    }
+                  }}
+                  className="hidden"
+                />
+                {editForm.torLogo && (
+                  <img
+                    src={editForm.torLogo}
+                    alt="Tournament Logo Preview"
+                    className="w-24 h-24 object-contain my-2 rounded-lg border border-slate-600"
+                    loading="lazy"
+                    onError={(e) => e.currentTarget.src = './logo.png'}
+                  />
+                )}
+              </div>
+              {["primaryColor", "secondaryColor", "overlayBg"].map(
+                (field) => (
+                  <div key={field}>
+                    <input
+                      type="text"
+                      name={field}
+                      value={(editForm as any)[field] || ""}
+                      onChange={handleEditChange}
+                      placeholder={field.replace(/([A-Z])/g, " $1").trim()}
+                      className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    />
+                  </div>
+                )
+              )}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  className="bg-green-600 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  Save Changes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingTournament(null);
+                    setShowEditModal(false);
+                  }}
+                  className="bg-slate-700 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

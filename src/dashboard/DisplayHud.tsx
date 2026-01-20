@@ -118,6 +118,19 @@ const DisplayHud: React.FC = () => {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  // Helper to open the HighlightSchedule viewer with selected matches
+  const openHighlightScheduleViewer = (
+    tournamentId: string,
+    roundId: string,
+    selectedMatchIds: string[],
+    theme: string
+  ) => {
+    if (selectedMatchIds.length === 0) return;
+    const scheduleMatchesParam = selectedMatchIds.join(',');
+    const url = `/public/tournament/${tournamentId}/round/${roundId}/match/${selectedMatchIds[0]}?theme=${encodeURIComponent(theme)}&view=HighlightSchedule&followSelected=true&scheduleMatches=${encodeURIComponent(scheduleMatchesParam)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const toggleTournament = (tournamentId: string) => {
     if (expandedTournaments.includes(tournamentId)) {
       setExpandedTournaments(prev => prev.filter(id => id !== tournamentId));
@@ -332,7 +345,7 @@ const DisplayHud: React.FC = () => {
                                         onChange={e => onMatchCheckboxChange(t._id, r._id, m._id, e.target.checked)}
                                         className="w-4 h-4 text-purple-600 bg-slate-700 border-slate-600 rounded focus:ring-purple-600 focus:ring-2"
                                       />
-                                      <span className="ml-3 text-sm font-medium text-gray-200">{m.matchName || `Match ${index + 1}`}</span>
+                                      <span className="ml-3 text-sm font-medium text-gray-200">{ `Match ${m.matchNo}`}</span>
                                     </label>
                                   ))}
                                 </div>
@@ -350,7 +363,7 @@ const DisplayHud: React.FC = () => {
                                         onChange={e => onScheduleMatchCheckboxChange(t._id, r._id, m._id, e.target.checked)}
                                         className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-600 focus:ring-2"
                                       />
-                                      <span className="ml-3 text-sm font-medium text-gray-200">{m.matchName || `Match ${index + 1}`}</span>
+                                      <span className="ml-3 text-sm font-medium text-gray-200">{ `Match ${m.matchNo}`}</span>
                                     </label>
                                   ))}
                                 </div>
@@ -374,7 +387,8 @@ const DisplayHud: React.FC = () => {
                               </div>
 
                               <div className="flex flex-wrap gap-2">
-                                {['MatchSummary', 'Lower', 'Upper', 'Dom', 'LiveStats', 'LiveFrags', 'Alerts', 'MatchData', 'MatchFragrs', 'CommingUpNext', 'OverAllData', 'OverallFrags', 'WwcdStats', 'WwcdSummary', 'playerH2H', 'TeamH2H', 'Champions', '1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'ZoneClose', 'intro', 'mapPreview', 'slots', 'mvp', 'highlightPoints', 'HighlightSchedule', 'RosterShowCase'].map((viewName) => (
+                                {/* Regular view buttons that use selected match */}
+                                {['MatchSummary', 'Lower', 'Upper', 'Dom', 'LiveStats', 'LiveFrags', 'Alerts', 'MatchData', 'MatchFragrs', 'CommingUpNext', 'OverAllData', 'OverallFrags', 'WwcdStats', 'WwcdSummary', 'playerH2H', 'TeamH2H', 'Champions', '1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'ZoneClose', 'intro', 'mapPreview', 'slots', 'mvp', 'highlightPoints', 'RosterShowCase', 'PlayerSwitch'].map((viewName) => (
                                   <button
                                     key={viewName}
                                     className="bg-slate-700 hover:bg-purple-600 text-white text-xs font-medium px-3 py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-slate-600 hover:border-purple-500"
@@ -386,6 +400,8 @@ const DisplayHud: React.FC = () => {
                                     {viewName}
                                   </button>
                                 ))}
+                                
+                                {/* Schedule button - uses schedule matches */}
                                 <button
                                   className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
                                   disabled={(selectedScheduleMatches[key] || []).length === 0}
@@ -394,6 +410,17 @@ const DisplayHud: React.FC = () => {
                                   }
                                 >
                                   Schedule ({(selectedScheduleMatches[key] || []).length})
+                                </button>
+
+                                {/* HighlightSchedule button - uses schedule matches */}
+                                <button
+                                  className="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-900/20"
+                                  disabled={(selectedScheduleMatches[key] || []).length === 0}
+                                  onClick={() =>
+                                    openHighlightScheduleViewer(t._id, r._id, selectedScheduleMatches[key] || [], getSelectedTheme(t._id))
+                                  }
+                                >
+                                  HighlightSchedule ({(selectedScheduleMatches[key] || []).length})
                                 </button>
                               </div>
                             </div>

@@ -4,6 +4,8 @@ import api from '../login/api';
 import { socket } from "./socket"; // shared socket
 import SocketManager from './socketManager';
 import { requestQueue, UpdateBatcher } from './requestQueue';
+import { uploadToCloudinary } from '../utils/cloudinaryUpload';
+import { FaUpload } from 'react-icons/fa';
 
 // Retry utility with exponential backoff
 const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, baseDelay = 1000) => {
@@ -74,6 +76,10 @@ const MatchDataViewer: React.FC = () => {
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
   const [playersLoading, setPlayersLoading] = useState(false);
   const [savingRoster, setSavingRoster] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState('');
+  const [newPlayerId, setNewPlayerId] = useState('');
+  const [newPlayerPhoto, setNewPlayerPhoto] = useState<File | null>(null);
+  const [addingPlayer, setAddingPlayer] = useState(false);
 
   const teamRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const matchCacheRef = useRef<Record<string, any>>({});
@@ -311,24 +317,11 @@ const MatchDataViewer: React.FC = () => {
       setEditingTeam({ teamIndex, teamId, teamName });
       setPlayersLoading(true);
 
-      // Use cached match if available; otherwise fetch only this match by id
-      let currentMatch = matchCacheRef.current[String(matchId)];
-      if (!currentMatch) {
-        const matchRes = await api.get(`/matches/${matchId}`);
-        currentMatch = matchRes.data;
-        matchCacheRef.current[String(matchId)] = currentMatch;
-      }
+      // Fetch the team from MainTeams API to get the latest players
+      const teamRes = await api.get(`/teams/${teamId}`);
+      const teamData = teamRes.data;
 
-      // Derive roster from current match groups
-      const group = (currentMatch.groups || []).find((grp: any) =>
-        grp.slots?.some((slot: any) => slot.team && slot.team._id === teamId)
-      );
-      if (!group) throw new Error('Group for team not found');
-
-      const teamSlot = group.slots.find((slot: any) => slot.team && slot.team._id === teamId);
-      if (!teamSlot) throw new Error('Team not found in group');
-
-      const playersForTeam = (teamSlot.team.players || []).filter((p: any) => p && p.playerName && p._id);
+      const playersForTeam = (teamData.players || []).filter((p: any) => p && p.playerName && p._id);
 
       // Preselected players from current state (no extra fetch)
       const preselectedPlayers = (matchData?.teams?.[teamIndex]?.players || []).filter((p: any) => p && p.playerName && p._id);
@@ -359,6 +352,64 @@ const MatchDataViewer: React.FC = () => {
       setError(err.message || 'Failed to fetch team players');
     } finally {
       setPlayersLoading(false);
+    }
+  };
+
+  const addNewPlayer = async () => {
+    if (!editingTeam || !newPlayerName.trim()) {
+      alert('Please enter a player name');
+      return;
+    }
+
+    setAddingPlayer(true);
+    try {
+      let photoUrl = '';
+      if (newPlayerPhoto) {
+        photoUrl = await uploadToCloudinary(newPlayerPhoto, "players/photos", "player_photo");
+      }
+
+      // Fetch current team
+      const { data: team } = await api.get(`/teams/${editingTeam.teamId}`);
+
+      // Add new player to team
+      const newPlayerTemp = {
+        playerName: newPlayerName.trim(),
+        playerId: newPlayerId.trim() || undefined,
+        photo: photoUrl || undefined,
+      };
+
+      const updatedPlayers = [...team.players, newPlayerTemp];
+
+      // Update team
+      const { data: updatedTeam } = await api.put(`/teams/${editingTeam.teamId}`, {
+        ...team,
+        players: updatedPlayers,
+      });
+
+      // Get the newly added player with real _id
+      const newPlayer = updatedTeam.players.find((p: any) =>
+        p.playerName === newPlayerTemp.playerName &&
+        (!newPlayerTemp.playerId || p.playerId === newPlayerTemp.playerId)
+      );
+
+      if (!newPlayer) {
+        throw new Error('Failed to find newly added player');
+      }
+
+      // Update local available players
+      setAvailablePlayers(prev => [...prev, newPlayer]);
+
+      // Clear form
+      setNewPlayerName('');
+      setNewPlayerId('');
+      setNewPlayerPhoto(null);
+
+      alert('Player added successfully');
+    } catch (err: any) {
+      console.error('Failed to add player:', err);
+      alert('Failed to add player');
+    } finally {
+      setAddingPlayer(false);
     }
   };
 
@@ -448,6 +499,9 @@ const MatchDataViewer: React.FC = () => {
       });
 
       setEditingTeam(null);
+      setNewPlayerName('');
+      setNewPlayerId('');
+      setNewPlayerPhoto(null);
     } catch (err: any) {
       setError(err.message || 'Failed to update players');
     } finally {
@@ -817,10 +871,10 @@ const MatchDataViewer: React.FC = () => {
         </div>
       </div>
 
-      {/* Change Players Modal */}
+    {/* Change Players Modal */}
       {editingTeam && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-          <div className="bg-slate-800 border border-slate-700 p-8 rounded-2xl shadow-2xl w-full max-w-lg relative flex flex-col max-h-[90vh]">
+          <div className="bg-slate-800 border border-slate-700 p-8 rounded-2xl shadow-2xl w-full max-w-5xl relative flex flex-col max-h-[90vh]">
             <h3 className="text-2xl font-bold text-white mb-2">Edit Roster</h3>
             <p className="text-purple-400 font-medium mb-6">{editingTeam.teamName}</p>
 
@@ -831,71 +885,169 @@ const MatchDataViewer: React.FC = () => {
               </div>
             ) : (
               <>
-                <div className="flex-1 overflow-y-auto mb-6 pr-2">
-                  <p className="text-sm text-gray-400 mb-4">Select 1-4 players:</p>
-                  <div className="space-y-2">
-                    {availablePlayers.map((player) => {
-                      const playerIdStr = player._id.toString();
-                      const isChecked = selectedPlayers.includes(playerIdStr);
-                      return (
-                        <label
-                          key={playerIdStr}
-                          className={`
-                            flex items-center p-3 rounded-lg border cursor-pointer transition-all
-                            ${isChecked
-                              ? 'bg-purple-600/20 border-purple-500 text-white'
-                              : 'bg-slate-900/50 border-slate-700 text-gray-400 hover:bg-slate-800'
-                            }
-                          `}
-                        >
-                          <div
-                            onClick={() => {
-                              if (isChecked) {
-                                console.log('Unchecked player id:', playerIdStr);
-                                setSelectedPlayers(selectedPlayers.filter(id => id !== playerIdStr));
-                              } else {
-                                if (selectedPlayers.length >= 4) {
-                                  alert('Please untick a player before selecting another.');
-                                  return;
+                {/* Two Column Layout */}
+                <div className="flex gap-6 flex-1 overflow-hidden mb-6">
+                  {/* Left Side - Current Players */}
+                  <div className="flex-1 flex flex-col">
+                    <h4 className="text-lg font-semibold text-white mb-4">Current Players</h4>
+                    <div className="flex-1 overflow-y-auto pr-2">
+                      <p className="text-sm text-gray-400 mb-4">Select 1-4 players:</p>
+                      <div className="space-y-2">
+                        {availablePlayers.map((player) => {
+                          const playerIdStr = player._id.toString();
+                          const isChecked = selectedPlayers.includes(playerIdStr);
+                          return (
+                            <label
+                              key={playerIdStr}
+                              className={`
+                                flex items-center p-3 rounded-lg border cursor-pointer transition-all
+                                ${isChecked
+                                  ? 'bg-purple-600/20 border-purple-500 text-white'
+                                  : 'bg-slate-900/50 border-slate-700 text-gray-400 hover:bg-slate-800'
                                 }
-                                console.log('Checked player id:', playerIdStr);
-                                setSelectedPlayers([...selectedPlayers, playerIdStr]);
-                              }
-                            }}
-                            className={`w-5 h-5 rounded-md mr-3 flex items-center justify-center transition-all duration-200 cursor-pointer flex-shrink-0 ${isChecked ? 'bg-purple-600 shadow-[0_0_8px_rgba(147,51,234,0.5)]' : 'bg-slate-700 border border-slate-600 hover:border-slate-500'}`}
-                          >
-                            {isChecked && (
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
-                              </svg>
+                              `}
+                            >
+                              <div
+                                onClick={() => {
+                                  if (isChecked) {
+                                    console.log('Unchecked player id:', playerIdStr);
+                                    setSelectedPlayers(selectedPlayers.filter(id => id !== playerIdStr));
+                                  } else {
+                                    if (selectedPlayers.length >= 4) {
+                                      alert('Please untick a player before selecting another.');
+                                      return;
+                                    }
+                                    console.log('Checked player id:', playerIdStr);
+                                    setSelectedPlayers([...selectedPlayers, playerIdStr]);
+                                  }
+                                }}
+                                className={`w-5 h-5 rounded-md mr-3 flex items-center justify-center transition-all duration-200 cursor-pointer flex-shrink-0 ${isChecked ? 'bg-purple-600 shadow-[0_0_8px_rgba(147,51,234,0.5)]' : 'bg-slate-700 border border-slate-600 hover:border-slate-500'}`}
+                              >
+                                {isChecked && (
+                                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
+                                  </svg>
+                                )}
+                              </div>
+                              <span className="font-medium">{player.playerName}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vertical Divider */}
+                  <div className="w-px bg-slate-700"></div>
+
+                  {/* Right Side - Add New Player */}
+                  <div className="flex-1 flex flex-col">
+                    <h4 className="text-lg font-semibold text-white mb-4">Add New Player</h4>
+                    <div className="flex-1 overflow-y-auto pr-2">
+                      <div className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-6">
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Player Name *</label>
+                            <input
+                              type="text"
+                              placeholder="Enter player name"
+                              value={newPlayerName}
+                              onChange={(e) => setNewPlayerName(e.target.value)}
+                              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Player ID (Optional)</label>
+                            <input
+                              type="text"
+                              placeholder="Enter player ID"
+                              value={newPlayerId}
+                              onChange={(e) => setNewPlayerId(e.target.value)}
+                              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Player Photo</label>
+                            <label htmlFor="new-player-photo" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
+                              <FaUpload size={16} />
+                              Upload Player Photo
+                            </label>
+                            <input
+                              id="new-player-photo"
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => setNewPlayerPhoto(e.target.files?.[0] || null)}
+                              className="hidden"
+                            />
+                            {newPlayerPhoto && (
+                              <div className="mt-4 flex justify-center">
+                                <img
+                                  src={URL.createObjectURL(newPlayerPhoto)}
+                                  alt="Player Photo Preview"
+                                  className="w-32 h-32 object-cover rounded-lg border-2 border-slate-600 shadow-lg"
+                                  loading="lazy"
+                                />
+                              </div>
                             )}
                           </div>
-                          <span className="font-medium">{player.playerName}</span>
-                        </label>
-                      );
-                    })}
+
+                          <button
+                            onClick={addNewPlayer}
+                            disabled={addingPlayer || !newPlayerName.trim()}
+                            className={`w-full px-4 py-3 rounded-lg font-medium text-white transition-all flex items-center justify-center gap-2 mt-4 ${addingPlayer || !newPlayerName.trim() ? 'bg-green-700 cursor-not-allowed opacity-60' : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-900/20'}`}
+                          >
+                            {addingPlayer ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                Adding Player...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
+                                </svg>
+                                Add Player 
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-700">
+                {/* Bottom Action Buttons */}
+                <div className="flex justify-end gap-3 pt-6 border-t border-slate-700">
                   <button
-                    onClick={() => setEditingTeam(null)}
-                    className="px-5 py-2.5 rounded-xl font-medium text-gray-300 bg-slate-700 hover:bg-slate-600 transition-colors"
+                    onClick={() => {
+                      setEditingTeam(null);
+                      setNewPlayerName('');
+                      setNewPlayerId('');
+                      setNewPlayerPhoto(null);
+                    }}
+                    className="px-6 py-2.5 rounded-xl font-medium text-gray-300 bg-slate-700 hover:bg-slate-600 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={saveChangedPlayers}
                     disabled={savingRoster}
-                    className={`px-5 py-2.5 rounded-xl font-medium text-white shadow-lg shadow-purple-900/20 transition-all flex items-center gap-2 ${savingRoster ? 'bg-purple-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
+                    className={`px-6 py-2.5 rounded-xl font-medium text-white shadow-lg shadow-purple-900/20 transition-all flex items-center gap-2 ${savingRoster ? 'bg-purple-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
                   >
                     {savingRoster ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        Saving...
+                        Saving Roster...
                       </>
                     ) : (
-                      'Save Roster'
+                      <>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        Save Roster
+                      </>
                     )}
                   </button>
                 </div>

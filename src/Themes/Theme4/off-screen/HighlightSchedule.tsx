@@ -262,12 +262,12 @@ const MatchItem: React.FC<MatchItemProps> = ({ match, index, primaryColor, secon
                 <span className='relative top-[10px] left-[-10px]'> {winningTeams[0].teamTag}</span>
                
               </span>
-            ) : match.map?.toUpperCase()}
+            ) : match.time?.toUpperCase()}
           </p>
         </div>
 
         <div className="text-[34px]  text-white relative  ml-auto">
-{hasWinner ? `${total} PTS` : match.time?.toUpperCase()}    </div>
+{hasWinner ? `${total} PTS` : match.map?.toUpperCase() || "NO MAP"}    </div>
       </div>
     </div>
   );

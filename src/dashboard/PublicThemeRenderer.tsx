@@ -29,6 +29,7 @@ import Intro from '../Themes/Theme1/on-screen/intro.tsx'
 import MapPreview from '../Themes/Theme1/off-screen/mapPreview.tsx'
 import Slots from '../Themes/Theme1/off-screen/slots.tsx'
 import RosterShowCase from '../Themes/Theme4/off-screen/RosterShowCase.tsx'
+import PlayerSwitch from '../Themes/Theme4/off-screen/PlayerSwitch.tsx'
 
 // Theme2 imports
 import Lower2 from '../Themes/Theme2/on-screen/Lower.tsx';
@@ -251,6 +252,7 @@ const PublicThemeRenderer: React.FC = () => {
       HighlightPoints: OverallData2,
       HighlightSchedule: Schedule2,
       RosterShowCase: RosterShowCase,
+      PlayerSwitch: null,
     },
     Theme3: {
       Lower: Lower3,
@@ -282,6 +284,7 @@ const PublicThemeRenderer: React.FC = () => {
       HighlightPoints: OverallData3,
       HighlightSchedule: Schedule3,
       RosterShowCase: RosterShowCase,
+      PlayerSwitch: null,
     },
     Theme4: {
       Lower: Lower4,
@@ -313,6 +316,7 @@ const PublicThemeRenderer: React.FC = () => {
       HighlightPoints: HighlightPoints,
       HighlightSchedule: HighlightSchedule,
       RosterShowCase: RosterShowCase,
+      PlayerSwitch: PlayerSwitch,
     },
   };
 
@@ -348,7 +352,8 @@ const PublicThemeRenderer: React.FC = () => {
     HighlightPoints: HighlightPointsComp,
     HighlightSchedule: HighlightScheduleComp,
     RosterShowCase: RosterShowCaseComp,
-  } = activeTheme;
+    PlayerSwitch: PlayerSwitchComp,
+  } = activeTheme as any;
 
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [round, setRound] = useState<Round | null>(null);
@@ -374,7 +379,7 @@ const PublicThemeRenderer: React.FC = () => {
         const needsOverallData = ['OverAllData', 'LiveStats', '1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'highlightPoints'].includes(view);
         const needsMatches = ['OverAllData', 'Schedule', 'Lower', 'highlightPoints', 'HighlightSchedule'].includes(view);
         const needsMatchDatas = ['OverAllData', 'Schedule', 'highlightPoints', 'HighlightSchedule'].includes(view);
-        const needsMatchData = ['Upper', 'Dom', 'Alerts', 'LiveStats', 'LiveFrags', 'MatchData', 'MatchFragrs', 'WwcdSummary', 'WwcdStats', 'playerH2H', 'mapPreview', 'slots', 'TeamH2H', 'mvp', 'RosterShowCase', 'MatchSummary', 'Champions','1stRunnerUp', '2ndRunnerUp', 'EventMvp',].includes(view);
+        const needsMatchData = ['Upper', 'Dom', 'Alerts', 'LiveStats', 'LiveFrags', 'MatchData', 'MatchFragrs', 'WwcdSummary', 'WwcdStats', 'playerH2H', 'mapPreview', 'slots', 'TeamH2H', 'mvp', 'RosterShowCase', 'MatchSummary', 'Champions','1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'PlayerSwitch'].includes(view);
         const needsBackpackInfo = ['MatchSummary', 'Upper', 'mvp'].includes(view);
 
         // Always fetch basic data
@@ -595,9 +600,11 @@ const PublicThemeRenderer: React.FC = () => {
         case 'highlightPoints':
           return <HighlightPointsComp tournament={tournament} round={round} match={match} matchData={matchData} overallData={overallData} matches={matches} matchDatas={matchDatas} />
         case 'HighlightSchedule':
-          return <HighlightScheduleComp tournament={tournament} round={round} matches={matches} matchDatas={matchDatas} selectedScheduleMatches={selectedScheduleMatchIds} matchData={matchData} />
+          return <HighlightScheduleComp tournament={tournament} round={round} matches={matches} matchDatas={matchDatas} selectedScheduleMatches={selectedScheduleMatchIds}  />
         case 'RosterShowCase':
           return <RosterShowCaseComp tournament={tournament} round={round} match={match} matchData={matchData} />
+        case 'PlayerSwitch':
+          return PlayerSwitchComp ? <PlayerSwitchComp match={match} matchData={matchData} loading={loading} error={error} /> : null;
       default:
         return (
           <div style={{
