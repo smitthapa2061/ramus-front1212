@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import api from '../login/api';
 import { socket } from "./socket"; // shared socket
@@ -56,11 +57,12 @@ interface MatchData {
 
 
 const MatchDataViewer: React.FC = () => {
-  const { tournamentId, roundId, matchId } = useParams<{
-    tournamentId: string;
-    roundId: string;
-    matchId: string;
-  }>();
+   const { t } = useTranslation();
+   const { tournamentId, roundId, matchId } = useParams<{
+     tournamentId: string;
+     roundId: string;
+     matchId: string;
+   }>();
 
   const [matchData, setMatchData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -357,7 +359,7 @@ const MatchDataViewer: React.FC = () => {
 
   const addNewPlayer = async () => {
     if (!editingTeam || !newPlayerName.trim()) {
-      alert('Please enter a player name');
+      alert(t('matchData.pleaseEnterPlayerName'));
       return;
     }
 
@@ -404,10 +406,10 @@ const MatchDataViewer: React.FC = () => {
       setNewPlayerId('');
       setNewPlayerPhoto(null);
 
-      alert('Player added successfully');
+      alert(t('matchData.playerAddedSuccessfully'));
     } catch (err: any) {
       console.error('Failed to add player:', err);
-      alert('Failed to add player');
+      alert(t('matchData.failedToAddPlayer'));
     } finally {
       setAddingPlayer(false);
     }
@@ -415,7 +417,7 @@ const MatchDataViewer: React.FC = () => {
 
   const saveChangedPlayers = async () => {
     if (!editingTeam || selectedPlayers.length < 1 || selectedPlayers.length > 4) {
-      alert('Please select between 1 and 4 players.');
+      alert(t('matchData.pleaseSelectPlayers'));
       return;
     }
 
@@ -914,7 +916,7 @@ const MatchDataViewer: React.FC = () => {
                                     setSelectedPlayers(selectedPlayers.filter(id => id !== playerIdStr));
                                   } else {
                                     if (selectedPlayers.length >= 4) {
-                                      alert('Please untick a player before selecting another.');
+                                      alert(t('matchData.pleaseUntickPlayer'));
                                       return;
                                     }
                                     console.log('Checked player id:', playerIdStr);

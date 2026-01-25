@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../login/api.tsx'; // <-- your axios instance
 
@@ -35,6 +36,7 @@ interface GroupData {
 }
 
 const Match: React.FC = () => {
+  const { t } = useTranslation();
   const { tournamentId, roundId } = useParams<{ tournamentId: string; roundId: string }>();
   const navigate = useNavigate();
 
@@ -220,8 +222,8 @@ const Match: React.FC = () => {
 
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-white">Matches</h2>
-            <p className="text-gray-400 mt-1">Manage matches for this round</p>
+            <h2 className="text-3xl font-bold tracking-tight text-white">{t('matches.title')}</h2>
+            <p className="text-gray-400 mt-1">{t('matches.subtitle')}</p>
           </div>
           <button
             type="button"
@@ -231,19 +233,19 @@ const Match: React.FC = () => {
               : 'bg-purple-600 text-white hover:bg-purple-700'
               }`}
           >
-            {showAddForm ? 'Cancel' : '+ Add Match'}
+            {showAddForm ? t('matches.cancel') : '+ ' + t('matches.addMatch')}
           </button>
         </div>
 
         {showAddForm && (
           <div className="mb-8 p-8 border border-slate-700/50 rounded-xl bg-slate-800/50 backdrop-blur-sm shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
-            <h3 className="text-xl font-bold mb-6 text-white border-b border-slate-700 pb-4">Add New Match</h3>
+            <h3 className="text-xl font-bold mb-6 text-white border-b border-slate-700 pb-4">{t('matches.addNewMatch')}</h3>
             <form onSubmit={handleAddMatch} className="space-y-6">
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label htmlFor="newMatchNo" className="block mb-2 text-sm font-medium text-gray-400">
-                    Match Number
+                    {t('matches.matchNumber')}
                   </label>
                   <input
                     id="newMatchNo"
@@ -258,7 +260,7 @@ const Match: React.FC = () => {
 
                 <div>
                   <label htmlFor="newTime" className="block mb-2 text-sm font-medium text-gray-400">
-                    Match Time
+                    {t('matches.matchTime')}
                   </label>
                   <input
                     id="newTime"
@@ -272,7 +274,7 @@ const Match: React.FC = () => {
 
                 <div>
                   <label htmlFor="newMap" className="block mb-2 text-sm font-medium text-gray-400">
-                    Map Name
+                    {t('matches.mapName')}
                   </label>
                   <select
                     id="newMap"
@@ -281,7 +283,7 @@ const Match: React.FC = () => {
                     className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all appearance-none"
                     required
                   >
-                    <option value="" className="bg-slate-800">Select a map</option>
+                    <option value="" className="bg-slate-800">{t('matches.selectMap')}</option>
                     <option value="Erangel" className="bg-slate-800">Erangel</option>
                     <option value="Miramar" className="bg-slate-800">Miramar</option>
                     <option value="Sanhok" className="bg-slate-800">Sanhok</option>
@@ -296,7 +298,7 @@ const Match: React.FC = () => {
               </div>
 
               <div>
-                <p className="block mb-3 text-sm font-medium text-gray-400">Select Groups</p>
+                <p className="block mb-3 text-sm font-medium text-gray-400">{t('matches.selectGroups')}</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {groups.map((group) => (
                     <label
@@ -336,10 +338,10 @@ const Match: React.FC = () => {
                 {isCreating ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Creating...
+                    {t('matches.creating')}
                   </>
                 ) : (
-                  'Create Match'
+                  t('matches.createMatch')
                 )}
               </button>
             </form>
@@ -348,8 +350,8 @@ const Match: React.FC = () => {
 
         {matches.length === 0 ? (
           <div className="text-center py-16 bg-slate-800/30 rounded-xl border border-slate-700/30 border-dashed">
-            <p className="text-xl text-gray-500 font-medium">No matches scheduled yet.</p>
-            <p className="text-gray-600 mt-2">Click "Add Match" to get started.</p>
+            <p className="text-xl text-gray-500 font-medium">{t('matches.noMatches')}</p>
+            <p className="text-gray-600 mt-2">{t('matches.clickAddMatch')}</p>
           </div>
         ) : (
           <ul className="space-y-4 pb-12">
@@ -417,7 +419,7 @@ const Match: React.FC = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <span className="px-3 py-1 bg-purple-500/20 text-purple-300 text-xs font-bold rounded-full border border-purple-500/30">
-                          MATCH {match.matchNo}
+                          {t('matches.matchLabel')} {match.matchNo}
                         </span>
                         <span className="text-gray-400 text-sm flex items-center gap-1">
                           🕒 {match.time}
@@ -445,7 +447,7 @@ const Match: React.FC = () => {
                         }}
                         className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600 hover:text-white transition-all"
                       >
-                        Edit
+                        {t('matches.edit')}
                       </button>
                       <button
                         onClick={(e) => {
@@ -454,7 +456,7 @@ const Match: React.FC = () => {
                         }}
                         className="px-4 py-2 bg-red-600/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-600 hover:text-white transition-all"
                       >
-                        Delete
+                        {t('matches.delete')}
                       </button>
                     </div>
                   </div>

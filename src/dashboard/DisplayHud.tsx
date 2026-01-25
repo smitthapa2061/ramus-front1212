@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../login/api.tsx';
 import PollingManager from './isPolling.tsx';
 import { FaDiscord, FaWhatsapp } from 'react-icons/fa';
@@ -21,6 +22,7 @@ interface Match {
 }
 
 const DisplayHud: React.FC = () => {
+  const { t: translate } = useTranslation();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [expandedTournaments, setExpandedTournaments] = useState<string[]>([]);
   const [roundsMap, setRoundsMap] = useState<Record<string, Round[]>>({});
@@ -226,8 +228,8 @@ const DisplayHud: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
       {/* Header/Navigation Bar - Matching Dashboard */}
       <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700/50 sticky top-0 z-50">
-             <div className="max-w-7xl mx-auto px-6 py-4">
-               <div className="flex justify-between items-center">
+             <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
+               <div className="flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
                  {/* Logo */}
                  <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.location.href = '/dashboard'}>
                    <img
@@ -236,42 +238,42 @@ const DisplayHud: React.FC = () => {
                      className="w-[70px] h-[70px] rounded-lg shadow-lg"
                    />
                    <div>
-                   <h1 className="text-[1rem] font-bold text-white">ESPORTS MANAGEMENT</h1>
-                    <h1 className="text-[1rem] font-bold text-white">AND OVERLAY SOFTWARE</h1>
+                   <h1 className="text-[1rem] font-bold text-white">{translate('dashboard.header.title')}</h1>
+                    <h1 className="text-[1rem] font-bold text-white">{translate('dashboard.header.subtitle')}</h1>
                     </div>
                  </div>
      
                  {/* Navigation Buttons */}
-                 <nav className="flex items-center gap-3">
+                 <nav className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
                    <button
                      onClick={() => (window.location.href = '/dashboard')}
                      className="bg-purple-600 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-purple-700 transition-colors"
                    >
-                     Tournaments
+                     {translate('dashboard.nav.tournaments')}
                    </button>
                    <button
                      onClick={() => window.open('/teams', '_blank', 'noopener,noreferrer')}
                      className="bg-slate-700 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
                    >
-                     Add Teams
+                     {translate('dashboard.nav.teams')}
                    </button>
                    <button
                      onClick={() => window.open('/displayhud', '_blank', 'noopener,noreferrer')}
                      className="bg-slate-700 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
                    >
-                     Display HUD
+                     {translate('dashboard.nav.hud')}
                    </button>
                  </nav>
      
                  {/* User Info */}
-                 <div className="flex items-center gap-4">
+                 <div className="flex items-center gap-2 md:gap-4">
                    {user && (
                      <span className="text-sm text-gray-300 font-medium">
-                       Admin: <span className="text-white">{user.username}</span>
+                       {translate('dashboard.header.admin')}<span className="text-white">{user.username}</span>
                      </span>
                    )}
                    <div className="flex items-center gap-2 text-sm text-gray-300">
-                     <span>Help Desk</span>
+                     <span>{translate('dashboard.header.help')}</span>
                      <FaDiscord
                        className="cursor-pointer text-2xl text-gray-300 hover:text-purple-400 transition-colors"
                        onClick={() => window.open('https://discord.com/channels/623776491682922526/1426117227257663558', '_blank')}
@@ -283,7 +285,7 @@ const DisplayHud: React.FC = () => {
            </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
-        <h2 className="text-3xl font-bold text-white mb-8 text-center">Tournament Control Center</h2>
+        <h2 className="text-3xl font-bold text-white mb-8 text-center">{translate('displayHud.title')}</h2>
 <PollingManager/>
         <div className="space-y-4">
           {tournaments.map(t => (
@@ -293,13 +295,13 @@ const DisplayHud: React.FC = () => {
                 className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-700/30 transition-colors"
               >
                 <span className="text-xl font-bold text-white">{t.tournamentName}</span>
-                <span className="text-gray-400 text-sm">{expandedTournaments.includes(t._id) ? 'Collapse' : 'Expand'}</span>
+                <span className="text-gray-400 text-sm">{expandedTournaments.includes(t._id) ? translate('displayHud.collapse') : translate('displayHud.expand')}</span>
               </div>
 
               {expandedTournaments.includes(t._id) && (
                 <div className="p-4 border-t border-slate-700/50 bg-slate-900/30">
                   <div className="flex items-center gap-3 mb-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700/30">
-                    <span className="font-semibold text-gray-300">Theme:</span>
+                    <span className="font-semibold text-gray-300">{translate('displayHud.theme')}:</span>
                     <select
                       value={getSelectedTheme(t._id)}
                       onClick={(e) => e.stopPropagation()}
@@ -328,14 +330,14 @@ const DisplayHud: React.FC = () => {
                             className={`p-3 flex justify-between items-center cursor-pointer transition-colors ${isRoundExpanded ? 'bg-slate-700/50' : 'bg-slate-800/30 hover:bg-slate-700/30'}`}
                           >
                             <span className={`font-medium ${isRoundExpanded ? 'text-purple-400' : 'text-gray-200'}`}>{r.roundName}</span>
-                            <span className="text-xs text-gray-500">Round</span>
+                            <span className="text-xs text-gray-500">{translate('displayHud.round')}</span>
                           </div>
 
                           {isRoundExpanded && matchesMap[key]?.length > 0 && (
                             <div className="p-4 bg-slate-900/50 border-t border-slate-700/50">
                               {/* Regular match selection */}
                               <div className="mb-6">
-                                <div className="font-semibold text-purple-400 mb-3 text-sm uppercase tracking-wider">Select Match for Live Views</div>
+                                <div className="font-semibold text-purple-400 mb-3 text-sm uppercase tracking-wider">{translate('displayHud.selectMatchLive')}</div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   {matchesMap[key].map((m, index) => (
                                     <label key={m._id} className={`flex items-center p-3 rounded-lg border cursor-pointer transition-all ${selectedMatchId === m._id ? 'bg-purple-900/30 border-purple-500/50' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-700/50'}`}>
@@ -353,7 +355,7 @@ const DisplayHud: React.FC = () => {
 
                               {/* Schedule match selection */}
                               <div className="mb-6">
-                                <div className="font-semibold text-blue-400 mb-3 text-sm uppercase tracking-wider">Select Matches for Schedule View</div>
+                                <div className="font-semibold text-blue-400 mb-3 text-sm uppercase tracking-wider">{translate('displayHud.selectMatchesSchedule')}</div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   {matchesMap[key].map((m, index) => (
                                     <label key={`schedule-${m._id}`} className={`flex items-center p-3 rounded-lg border cursor-pointer transition-all ${(selectedScheduleMatches[key] || []).includes(m._id) ? 'bg-blue-900/30 border-blue-500/50' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-700/50'}`}>
@@ -372,17 +374,17 @@ const DisplayHud: React.FC = () => {
                           )}
 
                           {isRoundExpanded && matchesMap[key]?.length === 0 && (
-                            <div className="p-4 text-center text-gray-500 italic bg-slate-900/50 border-t border-slate-700/50">No matches available</div>
+                            <div className="p-4 text-center text-gray-500 italic bg-slate-900/50 border-t border-slate-700/50">{translate('displayHud.noMatches')}</div>
                           )}
 
                           {isRoundExpanded && (
                             <div className="p-4 bg-slate-800/30 border-t border-slate-700/50">
                               <div className="mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700/30">
                                 <div className="text-sm text-gray-400 mb-1">
-                                  <span className="font-semibold text-purple-400">Live Match:</span> {selectedMatchId ? (matchesMap[key]?.find((m2: any) => m2._id === selectedMatchId)?.matchName || `Match ${(matchesMap[key]?.find((m2: any) => m2._id === selectedMatchId)?.matchNo || matchesMap[key]?.find((m2: any) => m2._id === selectedMatchId)?._matchNo) || 'N/A'}`) : 'None'}
+                                  <span className="font-semibold text-purple-400">{translate('displayHud.liveMatch')}:</span> {selectedMatchId ? (matchesMap[key]?.find((m2: any) => m2._id === selectedMatchId)?.matchName || `Match ${(matchesMap[key]?.find((m2: any) => m2._id === selectedMatchId)?.matchNo || matchesMap[key]?.find((m2: any) => m2._id === selectedMatchId)?._matchNo) || 'N/A'}`) : translate('displayHud.none')}
                                 </div>
                                 <div className="text-sm text-gray-400">
-                                  <span className="font-semibold text-blue-400">Schedule:</span> {(selectedScheduleMatches[key] || []).length > 0 ? (selectedScheduleMatches[key] || []).map(matchId => matchesMap[key]?.find((m2: any) => m2._id === matchId)?.matchName || `Match ${(matchesMap[key]?.find((m2: any) => m2._id === matchId)?.matchNo || matchesMap[key]?.find((m2: any) => m2._id === matchId)?._matchNo) || 'N/A'}`).join(', ') : 'None'}
+                                  <span className="font-semibold text-blue-400">{translate('displayHud.schedule')}:</span> {(selectedScheduleMatches[key] || []).length > 0 ? (selectedScheduleMatches[key] || []).map(matchId => matchesMap[key]?.find((m2: any) => m2._id === matchId)?.matchName || `Match ${(matchesMap[key]?.find((m2: any) => m2._id === matchId)?.matchNo || matchesMap[key]?.find((m2: any) => m2._id === matchId)?._matchNo) || 'N/A'}`).join(', ') : translate('displayHud.none')}
                                 </div>
                               </div>
 
@@ -427,7 +429,7 @@ const DisplayHud: React.FC = () => {
                           )}
                         </div>
                       );
-                    }) : <div className="text-center py-4 text-gray-500 italic">No rounds available</div>}
+                    }) : <div className="text-center py-4 text-gray-500 italic">{translate('displayHud.noRounds')}</div>}
                   </div>
                 </div>
               )}

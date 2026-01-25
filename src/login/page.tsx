@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from 'react-i18next';
 import api from "./api";
 
 
@@ -19,6 +20,7 @@ interface UserData {
 
 
 const Login: React.FC = () => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -38,7 +40,7 @@ const Login: React.FC = () => {
 
     // Basic validation
     if (!email || !password) {
-      setError("Please enter both email and password");
+      setError(t('login.validation.emailRequired'));
       setLoading(false);
       return;
     }
@@ -123,8 +125,8 @@ const Login: React.FC = () => {
                 className="w-[70px] h-[70px] rounded-lg shadow-lg"
               />
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-            <p className="text-gray-400 text-sm">Sign in to continue to ScoreSync</p>
+            <h1 className="text-3xl font-bold text-white mb-2">{t('login.title')}</h1>
+            <p className="text-gray-400 text-sm">{t('login.subtitle')}</p>
           </div>
 
           {error && (
@@ -134,7 +136,7 @@ const Login: React.FC = () => {
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                 </svg>
                 <div>
-                  <p className="font-semibold text-sm">Login Failed</p>
+                  <p className="font-semibold text-sm">{t('login.error')}</p>
                   <p className="text-sm opacity-90 mt-1">{error}</p>
                 </div>
               </div>
@@ -144,7 +146,7 @@ const Login: React.FC = () => {
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
               <label htmlFor="email" className="block text-sm font-medium text-gray-300">
-                Email Address
+                {t('login.email')}
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -155,7 +157,7 @@ const Login: React.FC = () => {
                 <input
                   id="email"
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder={t('login.emailPlaceholder')}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -167,7 +169,7 @@ const Login: React.FC = () => {
 
             <div className="space-y-2">
               <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                Password
+                {t('login.password')}
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -178,7 +180,7 @@ const Login: React.FC = () => {
                 <input
                   id="password"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder={t('login.passwordPlaceholder')}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -190,7 +192,7 @@ const Login: React.FC = () => {
 
             <div className="flex items-center justify-end">
               <a href="/forgot-password" className="text-sm text-purple-400 hover:text-purple-300 transition-colors">
-                Forgot password?
+                {t('login.forgotPassword')}
               </a>
             </div>
 
@@ -208,11 +210,9 @@ const Login: React.FC = () => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Signing in...
+                  {t('login.signingIn')}
                 </span>
-              ) : (
-                'Sign In'
-              )}
+              ) : t('login.signIn')}
             </button>
           </form>
 
@@ -228,9 +228,9 @@ const Login: React.FC = () => {
 
           <div className="mt-6 text-center">
             <p className="text-gray-400 text-sm">
-              Don't have an account?{' '}
+              {t('login.noAccount')}{' '}
               <a href="/register" className="text-purple-400 hover:text-purple-300 font-semibold transition-colors hover:underline">
-                Sign up
+                {t('login.signUp')}
               </a>
             </p>
           </div>

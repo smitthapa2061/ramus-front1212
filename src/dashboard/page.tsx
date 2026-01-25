@@ -1,6 +1,7 @@
 import React, { useState, ChangeEvent, FormEvent, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FaEdit, FaTrash, FaDiscord, FaUpload } from "react-icons/fa";
+import { useTranslation } from 'react-i18next';
 import api from "../login/api"; // Axios instance with withCredentials
 import { socket } from "./socket"; // socket instance
 import { setCache, getCache, removeCache } from "./cache"; // ✅ caching utils
@@ -27,6 +28,7 @@ const GLOBAL_CACHE_KEY = "auth_user";
 const CACHE_KEY_BASE = "tournaments";
 
 const Dashboard: React.FC = () => {
+  const { t } = useTranslation();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<TournamentFormState>({
     tournamentName: "",
@@ -151,10 +153,10 @@ const Dashboard: React.FC = () => {
         overlayBg: "",
       });
       setShowForm(false);
-      alert("Tournament created successfully!");
+      alert(t('dashboard.page.messages.created'));
     } catch (err: any) {
       console.error("Error creating tournament:", err.response?.data?.message || err.message);
-      alert("Error creating tournament");
+      alert(t('dashboard.page.messages.updateFailed'));
     }
   };
 
@@ -190,10 +192,10 @@ const Dashboard: React.FC = () => {
       setCache(CACHE_KEY_BASE, updated);
       setEditingTournament(null);
       setShowEditModal(false);
-      alert("Tournament updated successfully");
+      alert(t('dashboard.page.messages.updated'));
     } catch (err: any) {
       console.error("Edit error:", err.response?.data?.message || err.message);
-      alert("Failed to update tournament");
+      alert(t('dashboard.page.messages.updateFailed'));
     }
   };
 
@@ -206,10 +208,10 @@ const Dashboard: React.FC = () => {
       const updated = tournaments.filter((t) => t._id !== id);
       setTournaments(updated);
       setCache(CACHE_KEY_BASE, updated);
-      alert("Tournament deleted successfully");
+      alert(t('dashboard.page.messages.deleted'));
     } catch (err: any) {
       console.error("Delete error:", err.response?.data?.message || err.message);
-      alert("Failed to delete tournament");
+      alert(t('dashboard.page.messages.deleteFailed'));
     }
   };
 
@@ -217,8 +219,8 @@ const Dashboard: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header/Navigation Bar */}
       <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700/50 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
             {/* Logo */}
             <div className="flex items-center gap-3">
               <img
@@ -227,42 +229,42 @@ const Dashboard: React.FC = () => {
                 className="w-[70px] h-[70px] rounded-lg shadow-lg"
               />
               <div>
-                <h1 className="text-[1rem] font-bold text-white">ESPORTS MANAGEMENT</h1>
-                <h1 className="text-[1rem] font-bold text-white">AND OVERLAY SOFTWARE</h1>
+                <h1 className="text-[1rem] font-bold text-white">{t('dashboard.header.title')}</h1>
+                <h1 className="text-[1rem] font-bold text-white">{t('dashboard.header.subtitle')}</h1>
               </div>
             </div>
 
             {/* Navigation Buttons */}
-            <nav className="flex items-center gap-3">
+            <nav className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
               <button
                 onClick={() => (window.location.href = '/dashboard')}
                 className="bg-purple-600 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-purple-700 transition-colors"
               >
-                Tournaments
+                {t('dashboard.nav.tournaments')}
               </button>
               <button
                 onClick={() => window.open('/teams', '_blank', 'noopener,noreferrer')}
                 className="bg-slate-700 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
               >
-                Add Teams
+                {t('dashboard.nav.teams')}
               </button>
               <button
                 onClick={() => window.open('/displayhud', '_blank', 'noopener,noreferrer')}
                 className="bg-slate-700 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
               >
-                Display HUD
+                {t('dashboard.nav.hud')}
               </button>
             </nav>
 
             {/* User Info */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4">
               {user && (
                 <span className="text-sm text-gray-300 font-medium">
-                  Admin: <span className="text-white">{user.username}</span>
+                  {t('dashboard.header.admin')}<span className="text-white">{user.username}</span>
                 </span>
               )}
               <div className="flex items-center gap-2 text-sm text-gray-300">
-                <span>Help Desk</span>
+                <span>{t('dashboard.header.help')}</span>
                 <FaDiscord
                   className="cursor-pointer text-2xl text-gray-300 hover:text-purple-400 transition-colors"
                   onClick={() => window.open('https://discord.com/channels/623776491682922526/1426117227257663558', '_blank')}
@@ -277,8 +279,8 @@ const Dashboard: React.FC = () => {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Page Header */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">Tournament Dashboard</h2>
-          <p className="text-gray-400">Manage your tournaments and configurations</p>
+          <h2 className="text-3xl font-bold text-white mb-2">{t('dashboard.page.title')}</h2>
+          <p className="text-gray-400">{t('dashboard.page.subtitle')}</p>
         </div>
 
         {/* Add Tournament Button */}
@@ -286,19 +288,19 @@ const Dashboard: React.FC = () => {
           className="bg-purple-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors mb-6 shadow-lg"
           onClick={() => setShowForm(!showForm)}
         >
-          + Add Tournament
+          {t('dashboard.page.addTournament')}
         </button>
 
         {/* --- Create Form --- */}
         {showForm && (
           <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 mb-8 shadow-xl max-w-2xl">
-            <h3 className="text-xl font-bold text-white mb-4">Create New Tournament</h3>
+            <h3 className="text-xl font-bold text-white mb-4">{t('dashboard.page.create.title')}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <input
                   type="text"
                   name="tournamentName"
-                  placeholder="Tournament Name"
+                  placeholder={t('dashboard.page.create.name')}
                   value={form.tournamentName}
                   onChange={handleChange}
                   className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
@@ -307,7 +309,7 @@ const Dashboard: React.FC = () => {
               <div>
                 <label htmlFor="tournament-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
                   <FaUpload size={16} />
-                  Upload Tournament Logo
+                  {t('dashboard.page.create.logo')}
                 </label>
                 <input
                   id="tournament-logo-upload"
@@ -327,9 +329,9 @@ const Dashboard: React.FC = () => {
                 )}
               </div>
               {[
-                { name: "primaryColor", placeholder: "Primary Color (e.g., #ffffff)" },
-                { name: "secondaryColor", placeholder: "Secondary Color (e.g., #000000)" },
-                { name: "overlayBg", placeholder: "Overlay Background (e.g., #1a1a1a)" },
+                { name: "primaryColor", placeholder: t('dashboard.page.create.primaryColor') },
+                { name: "secondaryColor", placeholder: t('dashboard.page.create.secondaryColor') },
+                { name: "overlayBg", placeholder: t('dashboard.page.create.overlayBg') },
               ].map((field) => (
                 <div key={field.name}>
                   <input
@@ -347,14 +349,14 @@ const Dashboard: React.FC = () => {
                   type="submit"
                   className="bg-purple-600 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-purple-700 transition-colors"
                 >
-                  Create Tournament
+                  {t('dashboard.page.create.button')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
                   className="bg-slate-700 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
                 >
-                  Cancel
+                  {t('dashboard.page.create.cancel')}
                 </button>
               </div>
             </form>
@@ -429,13 +431,13 @@ const Dashboard: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
-            <h3 className="text-xl font-semibold text-gray-400 mb-2">No tournaments yet</h3>
-            <p className="text-gray-500 mb-6">Get started by creating your first tournament</p>
+            <h3 className="text-xl font-semibold text-gray-400 mb-2">{t('dashboard.page.empty.title')}</h3>
+            <p className="text-gray-500 mb-6">{t('dashboard.page.empty.desc')}</p>
             <button
               onClick={() => setShowForm(true)}
               className="bg-purple-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
             >
-              Create Tournament
+              {t('dashboard.page.empty.button')}
             </button>
           </div>
         )}
@@ -445,7 +447,7 @@ const Dashboard: React.FC = () => {
       {showEditModal && editingTournament && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-bold text-white mb-4">Edit Tournament</h3>
+            <h3 className="text-xl font-bold text-white mb-4">{t('dashboard.page.edit.title')}</h3>
             <form onSubmit={handleEditSubmit} className="space-y-4">
               <div>
                 <input
@@ -453,14 +455,14 @@ const Dashboard: React.FC = () => {
                   name="tournamentName"
                   value={editForm.tournamentName || ""}
                   onChange={handleEditChange}
-                  placeholder="Tournament Name"
+                  placeholder={t('dashboard.page.edit.name')}
                   className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                 />
               </div>
               <div>
                 <label htmlFor="edit-tournament-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
                   <FaUpload size={16} />
-                  Upload Tournament Logo
+                  {t('dashboard.page.edit.logo')}
                 </label>
                 <input
                   id="edit-tournament-logo-upload"
@@ -496,7 +498,7 @@ const Dashboard: React.FC = () => {
                       name={field}
                       value={(editForm as any)[field] || ""}
                       onChange={handleEditChange}
-                      placeholder={field.replace(/([A-Z])/g, " $1").trim()}
+                      placeholder={t(`dashboard.page.edit.${field}`)}
                       className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                     />
                   </div>

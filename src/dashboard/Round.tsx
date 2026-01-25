@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams, Link } from 'react-router-dom';
 import { FaTrash, FaEdit } from 'react-icons/fa';
 import Group, { GroupRef } from './GroupsData.tsx';
@@ -15,6 +16,7 @@ interface RoundData {
 }
 
 const Round: React.FC = () => {
+  const { t } = useTranslation();
   const { tournamentId } = useParams<{ tournamentId?: string }>();
   const [rounds, setRounds] = useState<RoundData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -168,19 +170,19 @@ const Round: React.FC = () => {
     <div className="min-h-screen p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white font-sans">
       <div className="relative z-10 max-w-5xl mx-auto pt-8">
         <div className="flex justify-between items-center mb-8">
-          <h2 className="text-3xl font-bold tracking-tight text-white">Tournament Rounds</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-white">{t('rounds.title')}</h2>
           <div className="flex gap-3">
             <button
               className="px-6 py-3 rounded-lg text-white font-medium shadow-lg transition-all bg-blue-600 hover:bg-blue-700"
               onClick={() => groupRef.current?.openForm()}
             >
-              <span className="text-xl mr-2">+</span> Add Group
+              <span className="text-xl mr-2">+</span> {t('rounds.addGroup')}
             </button>
             <button
               className="px-6 py-3 rounded-lg text-white font-medium shadow-lg transition-all bg-purple-600 hover:bg-purple-700"
               onClick={openAddModal}
             >
-              <span className="text-xl mr-2">+</span> Add Round
+              <span className="text-xl mr-2">+</span> {t('rounds.addRound')}
             </button>
           </div>
         </div>
@@ -191,11 +193,11 @@ const Round: React.FC = () => {
         {showAddModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
             <form onSubmit={handleAddRound} className="bg-slate-800 border border-slate-700 p-8 rounded-xl shadow-2xl w-full max-w-md relative overflow-hidden">
-              <h3 className="text-xl font-bold mb-6 text-white">Add New Round</h3>
+              <h3 className="text-xl font-bold mb-6 text-white">{t('rounds.addNewRound')}</h3>
 
               <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Round Name</label>
+                  <label className="block text-sm font-medium text-gray-400 mb-1.5 ml-1">{t('rounds.roundName')}</label>
                   <input
                     type="text"
                     placeholder="e.g. Grand Finals"
@@ -206,7 +208,7 @@ const Round: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Day</label>
+                  <label className="block text-sm font-medium text-gray-400 mb-1.5 ml-1">{t('rounds.day')}</label>
                   <input
                     type="text"
                     placeholder="e.g. Day 1"
@@ -223,7 +225,7 @@ const Round: React.FC = () => {
                     onChange={e => setApiEnable(e.target.checked)}
                     className="w-5 h-5 rounded border-gray-600 text-red-600 focus:ring-red-500 bg-slate-900/50"
                   />
-                  <span className="font-bold text-red-400 group-hover:text-red-300 transition-colors">ENABLE API FOR THIS ROUND</span>
+                  <span className="font-bold text-red-400 group-hover:text-red-300 transition-colors">{t('rounds.enableApi')}</span>
                 </label>
               </div>
 
@@ -233,13 +235,13 @@ const Round: React.FC = () => {
                   className="flex-1 px-4 py-3 rounded-lg font-medium text-gray-300 bg-slate-700 hover:bg-slate-600 transition-colors"
                   onClick={closeAddModal}
                 >
-                  Cancel
+                  {t('rounds.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="flex-1 px-4 py-3 rounded-lg font-medium text-white bg-purple-600 hover:bg-purple-700 shadow-lg transition-all"
                 >
-                  Save Round
+                  {t('rounds.saveRound')}
                 </button>
               </div>
             </form>
@@ -253,7 +255,7 @@ const Round: React.FC = () => {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs text-gray-500 ml-1 mb-1 block">Name</label>
+                      <label className="text-xs text-gray-500 ml-1 mb-1 block">{t('rounds.name')}</label>
                       <input
                         type="text"
                         value={editRoundName}
@@ -262,7 +264,7 @@ const Round: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500 ml-1 mb-1 block">Day</label>
+                      <label className="text-xs text-gray-500 ml-1 mb-1 block">{t('rounds.day')}</label>
                       <input
                         type="text"
                         value={editDay}
@@ -278,20 +280,20 @@ const Round: React.FC = () => {
                       onChange={e => setEditApiEnable(e.target.checked)}
                       className="w-4 h-4 rounded bg-slate-900/50 border-gray-600 text-red-600 focus:ring-red-500"
                     />
-                    ENABLE API
+                    {t('rounds.enableApi')}
                   </label>
                   <div className="flex gap-2 justify-end pt-2">
                     <button
                       className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium transition-colors shadow-lg shadow-green-900/20"
                       onClick={() => handleUpdate(round._id)}
                     >
-                      Save Changes
-                    </button>
-                    <button
-                      className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-gray-300 font-medium transition-colors"
-                      onClick={() => setEditRoundId(null)}
-                    >
-                      Cancel
+                      {t('rounds.saveChanges')}
+                     </button>
+                     <button
+                       className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-gray-300 font-medium transition-colors"
+                       onClick={() => setEditRoundId(null)}
+                     >
+                       {t('rounds.cancel')}
                     </button>
                   </div>
                 </div>
@@ -317,12 +319,12 @@ const Round: React.FC = () => {
                     <div className="flex items-center gap-4 text-sm text-gray-400 ml-1">
                       <span className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-md">
                         <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                        {round.day || 'No Day Set'}
+                        {round.day || t('rounds.noDaySet')}
                       </span>
                       {round.apiEnable && (
                         <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-green-500/10 text-green-400 border border-green-500/20">
                           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                          API ACTIVE
+                          {t('rounds.apiActive')}
                         </span>
                       )}
                     </div>

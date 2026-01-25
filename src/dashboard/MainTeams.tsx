@@ -2,6 +2,7 @@ import React, { useState, useEffect, ChangeEvent, FormEvent, useCallback, useMem
 import { flushSync } from 'react-dom';
 import axios from 'axios';
 import { FaTrash, FaEdit, FaDiscord, FaWhatsapp, FaUpload } from 'react-icons/fa';
+import { useTranslation } from 'react-i18next';
 import api from '../login/api.tsx';
 import { uploadToCloudinary } from '../utils/cloudinaryUpload.tsx';
 
@@ -51,10 +52,11 @@ const TeamForm = React.memo(({
   handleLogoUpload: (e: ChangeEvent<HTMLInputElement>) => void;
   handlePlayerPhotoUpload: (index: number, e: ChangeEvent<HTMLInputElement>) => void;
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 mb-8 shadow-xl">
       <h3 className="text-xl font-bold text-white mb-4">
-        {editingTeamId ? 'Edit Team' : 'Create New Team'}
+        {editingTeamId ? t('teams.form.editTitle') : t('teams.form.createTitle')}
       </h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
@@ -78,7 +80,7 @@ const TeamForm = React.memo(({
         />
         <label htmlFor="modal-team-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
           <FaUpload size={16} />
-          Upload Team Logo
+          {t('teams.form.uploadLogo')}
         </label>
         <input
           id="modal-team-logo-upload"
@@ -97,13 +99,13 @@ const TeamForm = React.memo(({
           />
         )}
 
-        <h4 className="font-semibold text-white mt-4">Players</h4>
+        <h4 className="font-semibold text-white mt-4">{t('teams.form.players')}</h4>
         {playersForm.map((player, index) => (
           <div key={player._id || index} className="flex gap-2 mb-2 items-center">
             <input
               type="text"
               name="playerName"
-              placeholder="Player Name"
+              placeholder={t('teams.form.playerName')}
               value={player.playerName}
               onChange={(e) => handlePlayerChange(index, e)}
               required
@@ -112,14 +114,14 @@ const TeamForm = React.memo(({
             <input
               type="text"
               name="playerId"
-              placeholder="Player ID (optional)"
+              placeholder={t('teams.form.playerId')}
               value={player.playerId}
               onChange={(e) => handlePlayerChange(index, e)}
               className="px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all w-36"
             />
             <label htmlFor={`player-photo-${index}`} className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-40">
               <FaUpload size={10} />
-              Upload photo
+              {t('teams.form.uploadPhoto')}
             </label>
             <input
               id={`player-photo-${index}`}
@@ -154,16 +156,16 @@ const TeamForm = React.memo(({
           onClick={addPlayerInput}
           className="bg-green-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-green-700 transition-colors mb-4"
         >
-          + Add Another Player
+          {t('teams.form.addPlayer')}
         </button>
 
         <div className="flex gap-3 pt-2">
           <button type="submit" className="bg-purple-600 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-purple-700 transition-colors">
-            {editingTeamId ? 'Update Team' : 'Create Team'}
+            {editingTeamId ? t('teams.form.updateTeam') : t('teams.form.createTeam')}
           </button>
           {editingTeamId && (
             <button type="button" onClick={resetForm} className="bg-slate-700 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-slate-600 transition-colors">
-              Cancel
+              {t('teams.form.cancel')}
             </button>
           )}
         </div>
@@ -173,6 +175,7 @@ const TeamForm = React.memo(({
 });
 
 const SearchInput = React.memo(({ onSearchChange }: { onSearchChange: (query: string) => void }) => {
+  const { t } = useTranslation();
   const [localQuery, setLocalQuery] = useState('');
 
   const [, startTransition] = useTransition();
@@ -187,7 +190,7 @@ const SearchInput = React.memo(({ onSearchChange }: { onSearchChange: (query: st
   return (
     <input
       type="text"
-      placeholder="Search teams by name or tag"
+      placeholder={t('teams.search.placeholder')}
       value={localQuery}
       onChange={(e) => setLocalQuery(e.target.value)}
       className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all mb-6"
@@ -274,6 +277,7 @@ const TeamCard = React.memo(({
   deletingTeamIds: Set<string>;
   isVisible: boolean;
 }) => {
+  const { t } = useTranslation();
   const togglePlayer = useCallback((playerId: string) => {
     setSelectedPlayersPerTeam((prev) => {
       const newSet = new Set(prev[team._id] || []);
@@ -303,9 +307,9 @@ const TeamCard = React.memo(({
       <p className="text-purple-400 text-center text-sm mb-4">({team.teamTag})</p>
 
       <div className="w-full mt-2 flex-grow">
-        <h5 className="font-semibold text-gray-300 text-sm mb-2">Players</h5>
+        <h5 className="font-semibold text-gray-300 text-sm mb-2">{t('teams.teamCard.players')}</h5>
         {team.players.length === 0 ? (
-          <p className="text-gray-500 text-sm">No players</p>
+          <p className="text-gray-500 text-sm">{t('teams.teamCard.noPlayers')}</p>
         ) : (
           <ul className="text-sm space-y-2">
             {team.players.map((player) => (
@@ -326,7 +330,7 @@ const TeamCard = React.memo(({
             onClick={() => deleteSelectedPlayers(team._id)}
             className="bg-red-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-red-700 transition-colors mt-3 w-full text-sm"
           >
-            Delete Selected ({selectedForTeam.size})
+            {t('teams.teamCard.deleteSelected')} ({selectedForTeam.size})
           </button>
         )}
       </div>
@@ -337,7 +341,7 @@ const TeamCard = React.memo(({
           className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 rounded-xl hover:from-blue-500 hover:to-blue-600 transition-all text-white font-medium text-sm shadow-lg shadow-blue-900/30 hover:shadow-blue-900/50 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
           aria-label={`Edit team ${team.teamFullName}`}
         >
-          <FaEdit size={14} /> Edit
+          <FaEdit size={14} /> {t('teams.teamCard.edit')}
         </button>
         <button
           onClick={() => deleteTeam(team._id)}
@@ -345,7 +349,7 @@ const TeamCard = React.memo(({
           aria-label={`Delete team ${team.teamFullName}`}
           disabled={deletingTeamIds.has(team._id)}
         >
-          <FaTrash size={12} /> Delete
+          <FaTrash size={12} /> {t('teams.teamCard.delete')}
         </button>
       </div>
     </div>
@@ -367,6 +371,7 @@ const FormContainer = React.memo(({
   teams: Team[];
   setTeams: React.Dispatch<React.SetStateAction<Team[]>>;
 }) => {
+  const { t } = useTranslation();
   const [form, setForm] = useState({ teamFullName: '', teamTag: '', logo: '' });
   const [playersForm, setPlayersForm] = useState<Player[]>([
     { playerName: '', playerId: '', photo: '' },
@@ -480,11 +485,11 @@ const FormContainer = React.memo(({
   // If editing, show as modal; otherwise show as inline form
   if (editingTeamId) {
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl relative flex flex-col max-h-[90vh]">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-2 sm:p-4">
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl relative flex flex-col max-h-[95vh] sm:max-h-[90vh]">
           {/* Modal Header */}
-          <div className="flex items-center justify-between p-6 border-b border-slate-700">
-            <h3 className="text-2xl font-bold text-white">Edit Team</h3>
+          <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-700">
+            <h3 className="text-xl sm:text-2xl font-bold text-white">{t('teams.form.editTitle')}</h3>
             <button
               onClick={resetForm}
               className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-slate-700 transition-colors"
@@ -496,12 +501,12 @@ const FormContainer = React.memo(({
           </div>
 
           {/* Modal Body - Scrollable */}
-          <div className="p-6 overflow-y-auto flex-1">
+          <div className="p-4 sm:p-6 overflow-y-auto flex-1">
             <form onSubmit={handleSubmit} className="space-y-4">
               <input
                 type="text"
                 name="teamFullName"
-                placeholder="Team Full Name"
+                placeholder={t('teams.form.teamName')}
                 value={form.teamFullName}
                 onChange={handleTeamInputChange}
                 required
@@ -511,7 +516,7 @@ const FormContainer = React.memo(({
               <input
                 type="text"
                 name="teamTag"
-                placeholder="Team Tag"
+                placeholder={t('teams.form.teamTag')}
                 value={form.teamTag}
                 onChange={handleTeamInputChange}
                 required
@@ -519,7 +524,7 @@ const FormContainer = React.memo(({
               />
               <label htmlFor="team-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all">
                 <FaUpload size={16} />
-                Upload Team Logo
+                {t('teams.form.uploadLogo')}
               </label>
               <input
                 id="team-logo-upload"
@@ -537,29 +542,29 @@ const FormContainer = React.memo(({
                 />
               )}
 
-              <h4 className="font-semibold text-purple-400 mt-4 text-sm uppercase tracking-wider">Players</h4>
+              <h4 className="font-semibold text-purple-400 mt-4 text-sm uppercase tracking-wider">{t('teams.form.players')}</h4>
               {playersForm.map((player, index) => (
-                <div key={player._id || index} className="flex gap-2 items-center bg-slate-900/30 p-3 rounded-lg border border-slate-700/30 mb-2">
+                <div key={player._id || index} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-slate-900/30 p-3 rounded-lg border border-slate-700/30 mb-2">
                   <input
                     type="text"
                     name="playerName"
-                    placeholder="Player Name"
+                    placeholder={t('teams.form.playerName')}
                     value={player.playerName}
                     onChange={(e) => handlePlayerChange(index, e)}
                     required
-                    className="px-3 py-2 bg-slate-800 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all flex-grow text-sm"
+                    className="px-3 py-2 bg-slate-800 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all w-full sm:flex-grow text-sm"
                   />
                   <input
                     type="text"
                     name="playerId"
-                    placeholder="ID (optional)"
+                    placeholder={t('teams.form.playerId')}
                     value={player.playerId}
                     onChange={(e) => handlePlayerChange(index, e)}
-                    className="px-3 py-2 bg-slate-800 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all w-24 text-sm"
+                    className="px-3 py-2 bg-slate-800 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all w-full sm:w-24 text-sm"
                   />
-                  <label htmlFor={`modal-player-photo-${index}`} className="flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-700 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-28 text-sm">
+                  <label htmlFor={`modal-player-photo-${index}`} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-700 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full sm:w-28 text-sm">
                     <FaUpload size={12} />
-                    Upload
+                    {t('teams.form.uploadPhoto')}
                   </label>
                   <input
                     id={`modal-player-photo-${index}`}
@@ -568,25 +573,27 @@ const FormContainer = React.memo(({
                     onChange={(e) => handlePlayerPhotoUpload(index, e)}
                     className="hidden"
                   />
-                  {player.photo && (
-                    <img
-                      src={player.photo}
-                      alt="Player Photo Preview"
-                      className="w-10 h-10 rounded-full object-cover border-2 border-slate-600"
-                      loading="lazy"
-                      onError={(e) => e.currentTarget.src = './def_char.png'}
-                    />
-                  )}
-                  {playersForm.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removePlayerInput(index)}
-                      className="p-2 bg-red-600/20 rounded-lg hover:bg-red-600/40 transition-colors text-red-400"
-                      title="Remove player"
-                    >
-                      <FaTrash size={12} />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2 sm:ml-auto">
+                    {player.photo && (
+                      <img
+                        src={player.photo}
+                        alt="Player Photo Preview"
+                        className="w-10 h-10 rounded-full object-cover border-2 border-slate-600"
+                        loading="lazy"
+                        onError={(e) => e.currentTarget.src = './def_char.png'}
+                      />
+                    )}
+                    {playersForm.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removePlayerInput(index)}
+                        className="p-2 bg-red-600/20 rounded-lg hover:bg-red-600/40 transition-colors text-red-400"
+                        title="Remove player"
+                      >
+                        <FaTrash size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
               <button
@@ -594,23 +601,23 @@ const FormContainer = React.memo(({
                 onClick={addPlayerInput}
                 className="bg-green-600/20 text-green-400 font-medium px-4 py-2 rounded-lg hover:bg-green-600/30 transition-colors text-sm border border-green-600/30"
               >
-                + Add Player
+                {t('teams.form.addPlayer')}
               </button>
 
               {/* Modal Footer */}
-              <div className="flex gap-3 pt-4 border-t border-slate-700 mt-4">
+              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-700 mt-4">
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="flex-1 px-5 py-2.5 rounded-xl font-medium text-gray-300 bg-slate-700 hover:bg-slate-600 transition-colors"
+                  className="w-full sm:flex-1 px-5 py-2.5 rounded-xl font-medium text-gray-300 bg-slate-700 hover:bg-slate-600 transition-colors"
                 >
-                  Cancel
+                  {t('teams.form.cancel')}
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-5 py-2.5 rounded-xl font-medium text-white bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-900/20 transition-all"
+                  className="w-full sm:flex-1 px-5 py-2.5 rounded-xl font-medium text-white bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-900/20 transition-all"
                 >
-                  Update Team
+                  {t('teams.form.updateTeam')}
                 </button>
               </div>
             </form>
@@ -629,6 +636,7 @@ const FormContainer = React.memo(({
 });
 
 const Teams: React.FC = () => {
+  const { t } = useTranslation();
   const [teams, setTeams] = useState<Team[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
@@ -807,9 +815,9 @@ const Teams: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header/Navigation Bar - Matching Dashboard */}
-     <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700/50 sticky top-0 z-50">
-            <div className="max-w-7xl mx-auto px-6 py-4">
-              <div className="flex justify-between items-center">
+      <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700/50 sticky top-0 z-50">
+            <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
                 {/* Logo */}
                 <div className="flex items-center gap-3">
                   <img
@@ -818,42 +826,42 @@ const Teams: React.FC = () => {
                     className="w-[70px] h-[70px] rounded-lg shadow-lg"
                   />
                   <div>
-                  <h1 className="text-[1rem] font-bold text-white">ESPORTS MANAGEMENT</h1>
-                   <h1 className="text-[1rem] font-bold text-white">AND OVERLAY SOFTWARE</h1>
+                  <h1 className="text-[1rem] font-bold text-white">{t('dashboard.header.title')}</h1>
+                   <h1 className="text-[1rem] font-bold text-white">{t('dashboard.header.subtitle')}</h1>
                    </div>
                 </div>
     
                 {/* Navigation Buttons */}
-                <nav className="flex items-center gap-3">
+                <nav className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
                   <button
                     onClick={() => (window.location.href = '/dashboard')}
                     className="bg-purple-600 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-purple-700 transition-colors"
                   >
-                    Tournaments
+                    {t('dashboard.nav.tournaments')}
                   </button>
                   <button
                     onClick={() => window.open('/teams', '_blank', 'noopener,noreferrer')}
                     className="bg-slate-700 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
                   >
-                    Add Teams
+                    {t('dashboard.nav.teams')}
                   </button>
                   <button
                     onClick={() => window.open('/displayhud', '_blank', 'noopener,noreferrer')}
                     className="bg-slate-700 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
                   >
-                    Display HUD
+                    {t('dashboard.nav.hud')}
                   </button>
                 </nav>
     
                 {/* User Info */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 md:gap-4">
                   {user && (
                     <span className="text-sm text-gray-300 font-medium">
-                      Admin: <span className="text-white">{user.username}</span>
+                      {t('dashboard.header.admin')}<span className="text-white">{user.username}</span>
                     </span>
                   )}
                   <div className="flex items-center gap-2 text-sm text-gray-300">
-                    <span>Help Desk</span>
+                    <span>{t('dashboard.header.help')}</span>
                     <FaDiscord
                       className="cursor-pointer text-2xl text-gray-300 hover:text-purple-400 transition-colors"
                       onClick={() => window.open('https://discord.com/channels/623776491682922526/1426117227257663558', '_blank')}
@@ -867,8 +875,8 @@ const Teams: React.FC = () => {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Page Header */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">Team Management</h2>
-          <p className="text-gray-400">Create and manage your teams and players</p>
+          <h2 className="text-3xl font-bold text-white mb-2">{t('teams.header.title')}</h2>
+          <p className="text-gray-400">{t('teams.header.subtitle')}</p>
         </div>
 
         {/* Add Team Button */}
@@ -876,7 +884,7 @@ const Teams: React.FC = () => {
           onClick={handleAddTeamClick}
           className="bg-purple-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors mb-6 shadow-lg"
         >
-          {showForm ? 'Close Form' : editingTeamId ? 'Edit Team' : '+ Add Team'}
+          {showForm ? t('teams.form.cancel') : editingTeamId ? t('teams.form.editTitle') : '+ ' + t('dashboard.nav.teams')}
         </button>
 
         <FormContainer showForm={showForm} setShowForm={setShowForm} editingTeamId={editingTeamId} setEditingTeamId={setEditingTeamId} teams={teams} setTeams={setTeams} />
@@ -884,7 +892,7 @@ const Teams: React.FC = () => {
 
         {/* Teams List */}
         <div className="mb-6">
-          <h3 className="text-2xl font-bold text-white mb-4">Teams</h3>
+          <h3 className="text-2xl font-bold text-white mb-4">{t('dashboard.nav.teams')}</h3>
           <SearchInput onSearchChange={setDeferredSearchQuery} />
         </div>
 
@@ -895,8 +903,8 @@ const Teams: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
-            <h3 className="text-xl font-semibold text-gray-400 mb-2">No teams found</h3>
-            <p className="text-gray-500 mb-6">Create your first team to get started</p>
+            <h3 className="text-xl font-semibold text-gray-400 mb-2">{t('teams.messages.noTeams')}</h3>
+            <p className="text-gray-500 mb-6">{t('teams.messages.createFirst')}</p>
           </div>
         </div>
 
