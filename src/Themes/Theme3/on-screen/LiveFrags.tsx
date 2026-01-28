@@ -401,7 +401,7 @@ const LiveFrags: React.FC<LiveFragsProps> = ({ tournament, round, match, matchDa
                 {/* Player Avatar */}
                 <div className="w-[100px] h-[100px] ">
                   <img
-                    src={player.picUrl || 'https://res.cloudinary.com/dqckienxj/image/upload/v1735718663/defult_chach_apsjhc_jydubc.png'}
+                    src={player.picUrl || '/def_char.png'}
                     alt={player.playerName}
                     className="w-full h-full "
                   />

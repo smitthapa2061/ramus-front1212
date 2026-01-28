@@ -608,16 +608,16 @@ const LiveStats: React.FC<LiveStatsProps> = ({ tournament, round, match, matchDa
       </g>
 
       <defs>
-        <linearGradient
-          id="blackGradient"
-          x1="0"
-          y1="0"
-          x2="0"
-          y2="1"
-        >
-          <stop stopColor="#0c0c0cff" />
-          <stop offset="0.826923" stopColor="#242424ff" />
-        </linearGradient>
+     <linearGradient
+  id="blackGradient"
+  x1="0"
+  y1="0"
+  x2="0"
+  y2="1"
+>
+  <stop stopColor="#0c0c0c" stopOpacity="0.8" />
+  <stop offset="0.826923" stopColor="0.8" />
+</linearGradient>
 
         <linearGradient
           id="lightGradient"

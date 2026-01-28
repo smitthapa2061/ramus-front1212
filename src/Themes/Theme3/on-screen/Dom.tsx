@@ -322,7 +322,11 @@ return (
                 background: `linear-gradient(135deg, ${tournament.primaryColor || "#E01515"}, ${tournament.secondaryColor || "#620505"})`,
               }}
             >
-              <span className="text-white text-[40px] font-bold font-[Supermolot] text-center w-full">
+              <span
+                 style={{
+                background: `linear-gradient(135deg, ${tournament.primaryColor || "#E01515"}, ${tournament.secondaryColor || "#620505"})`,
+              }}
+              className="text-white text-[40px] font-bold font-[Supermolot] text-center w-full ">
                 {displayedPlayer.playerName}
               </span>
             </div>
@@ -355,7 +359,7 @@ return (
                   draggable={false}
                 />
 
-                <span className="font-[AWAKENNING] text-black text-[50px] leading-none">
+                <span className="font-bebas text-black text-[50px] leading-none">
                   {displayedPlayer.milestone}
                 </span>
               </div>
