@@ -175,11 +175,11 @@ const rightTeams = pageTeams.slice(pageMid);
 <div className="w-[100%] absolute  flex justify-center">
  
   {topTeam.placePoints === 10 && (   // 👈 show only if placePoints is 10
-    <img
-      src="https://res.cloudinary.com/dqckienxj/image/upload/v1753019880/roast-chicken_oyt00t.png"
-      alt="Chicken Icon"
-      className="w-[8%] relative left-[180px] top-[30px]"
-    />
+   <img
+  src="/chicken.png"
+  alt="Chicken Icon"
+  className="w-[8%] relative left-[180px] top-[30px] filter invert-[100%]"
+/>
   )}
 </div>
 
