@@ -113,6 +113,39 @@ import Mvp from '../Themes/Theme4/off-screen/mvp.tsx'
 import HighlightPoints from '../Themes/Theme4/off-screen/HighlightPoints.tsx'
 import HighlightSchedule from '../Themes/Theme4/off-screen/HighlightSchedule.tsx'
 
+// Theme5 imports
+import Lower5 from '../Themes/Theme5/on-screen/Lower.tsx';
+import Upper5 from '../Themes/Theme5/on-screen/Upper.tsx';
+import Dom5 from '../Themes/Theme5/on-screen/Dom.tsx';
+import Alerts5 from '../Themes/Theme5/on-screen/Alerts.tsx';
+import LiveStats5 from '../Themes/Theme5/on-screen/LiveStats.tsx';
+import LiveFrags5 from '../Themes/Theme5/on-screen/LiveFrags.tsx';
+import MatchData5 from '../Themes/Theme5/off-screen/MatchData.tsx';
+import MatchFragrs5 from '../Themes/Theme5/off-screen/MatchFragrs.tsx';
+import WwcdSummary5 from '../Themes/Theme5/off-screen/WwcdSummary.tsx';
+import WwcdStats5 from '../Themes/Theme5/off-screen/WwcdStats.tsx'
+import OverallData5 from   '../Themes/Theme5/off-screen/OverAllData.tsx'
+import OverallFrags5 from '../Themes/Theme5/off-screen/OverallFrags.tsx'
+import Schedule5 from '../Themes/Theme5/off-screen/Schedule.tsx'
+import CommingUpNext5 from '../Themes/Theme5/off-screen/CommingUpNext.tsx'
+import Champions5 from '../Themes/Theme5/off-screen/Champions.tsx'
+import FirstRunnerUp5 from '../Themes/Theme5/off-screen/1stRunnerUp.tsx'
+import SecondRunnerUp5 from '../Themes/Theme5/off-screen/2ndRunnerUp.tsx'
+import EventMvp5 from '../Themes/Theme5/off-screen/EventMvp.tsx'
+import MatchSummary5 from '../Themes/Theme5/off-screen/MatchSummary.tsx'
+import PlayerH2H5 from '../Themes/Theme5/off-screen/playerh2h.tsx'
+import TeamH2H5 from '../Themes/Theme5/off-screen/teamh2h.tsx'
+import ZoneClose5 from '../Themes/Theme5/on-screen/zoneClose.tsx'
+import Intro5 from '../Themes/Theme5/on-screen/intro.tsx'
+import MapPreview5 from '../Themes/Theme5/off-screen/mapPreview.tsx'
+import Slots5 from '../Themes/Theme5/off-screen/slots.tsx'
+import Mvp5 from '../Themes/Theme5/off-screen/mvp.tsx'
+import HighlightPoints5 from '../Themes/Theme5/off-screen/HighlightPoints.tsx'
+import HighlightSchedule5 from '../Themes/Theme5/off-screen/HighlightSchedule.tsx'
+import RosterShowCase5 from '../Themes/Theme5/off-screen/RosterShowCase.tsx'
+import PlayerSwitch5 from '../Themes/Theme5/off-screen/PlayerSwitch.tsx'
+import TopFragger5 from '../Themes/Theme5/off-screen/TopFragger.tsx'
+
 
 interface Tournament {
   _id: string;
@@ -318,9 +351,42 @@ const PublicThemeRenderer: React.FC = () => {
       RosterShowCase: RosterShowCase,
       PlayerSwitch: PlayerSwitch,
     },
+    Theme5: {
+      Lower: Lower5,
+      Upper: Upper5,
+      Dom: Dom5,
+      Alerts: Alerts5,
+      LiveStats: LiveStats5,
+      LiveFrags: LiveFrags5,
+      MatchData: MatchData5,
+      MatchFragrs: MatchFragrs5,
+      WwcdSummary: WwcdSummary5,
+      WwcdStats: WwcdStats5,
+      OverallData: OverallData5,
+      OverallFrags: OverallFrags5,
+      Schedule: Schedule5,
+      CommingUpNext: CommingUpNext5,
+      Champions: Champions5,
+      FirstRunnerUp: FirstRunnerUp5,
+      SecondRunnerUp: SecondRunnerUp5,
+      EventMvp: EventMvp5,
+      MatchSummary: MatchSummary5,
+      PlayerH2H: PlayerH2H5,
+      TeamH2H: TeamH2H5,
+      ZoneClose: ZoneClose5,
+      Intro: Intro5,
+      MapPreview: MapPreview5,
+      Slots: Slots5,
+      Mvp: Mvp5,
+      HighlightPoints: HighlightPoints5,
+      HighlightSchedule: HighlightSchedule5,
+      RosterShowCase: RosterShowCase5,
+      PlayerSwitch: PlayerSwitch5,
+      TopFragger: TopFragger5,
+    },
   };
 
-  const activeTheme = themes[theme as 'Theme1' | 'Theme2' | 'Theme3' | 'Theme4'] || themes['Theme1'];
+  const activeTheme = themes[theme as 'Theme1' | 'Theme2' | 'Theme3' | 'Theme4' | 'Theme5'] || themes['Theme1'];
 
   const {
     Lower: LowerComp,
@@ -376,7 +442,7 @@ const PublicThemeRenderer: React.FC = () => {
         setLoading(true);
 
         // Determine what data is needed based on the view
-        const needsOverallData = ['OverAllData', 'LiveStats', '1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'highlightPoints'].includes(view);
+        const needsOverallData = ['OverAllData', 'OverallFrags', 'LiveStats', '1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'highlightPoints'].includes(view);
         const needsMatches = ['OverAllData', 'Schedule', 'Lower', 'highlightPoints', 'HighlightSchedule'].includes(view);
         const needsMatchDatas = ['OverAllData', 'Schedule', 'highlightPoints', 'HighlightSchedule'].includes(view);
         const needsMatchData = ['Upper', 'Dom', 'Alerts', 'LiveStats', 'LiveFrags', 'MatchData', 'MatchFragrs', 'WwcdSummary', 'WwcdStats', 'playerH2H', 'mapPreview', 'slots', 'TeamH2H', 'mvp', 'RosterShowCase', 'MatchSummary', 'Champions','1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'PlayerSwitch'].includes(view);
@@ -568,7 +634,7 @@ const PublicThemeRenderer: React.FC = () => {
         case 'OverAllData':
           return <OverallDataComp tournament={tournament} round={round} match={match} matchData={matchData} overallData={overallData} matches={matches} matchDatas={matchDatas} />
         case 'OverallFrags':
-        return <OverallFragsComp tournament={tournament} round={round} />
+        return <OverallFragsComp tournament={tournament} round={round} match={match} matchData={matchData} overallData={overallData} matches={matches} matchDatas={matchDatas} />
         case 'Schedule':
         return <ScheduleComp tournament={tournament} round={round} matches={matches} matchDatas={matchDatas} selectedScheduleMatches={selectedScheduleMatchIds} />
         case 'CommingUpNext':
