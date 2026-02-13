@@ -197,7 +197,7 @@ const OverAllDataComponent: React.FC<OverAllDataProps> = ({ tournament, round, m
     <div className="w-[1920px] h-[1080px] text-black">
       {/* Title */}
       <div
-        className="px-6 py-2 font-[Awaking] text-[160px] leading-[1] absolute top-[0px] left-[450px] font-[700] w-[1100px] text-center text-white"
+        className="px-6 py-2 font-[Awaking] text-[160px] leading-[1] absolute top-[0px] left-[400px] font-[700] w-[1300px] text-center text-white tracking-wider"
         style={{
           backgroundImage: `linear-gradient(to right, ${tournament.primaryColor || '#6b21a8'}, ${tournament.secondaryColor || '#c084fc'})`,
           clipPath: "polygon(40px 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%)",

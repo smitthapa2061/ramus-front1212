@@ -58,6 +58,7 @@ const TeamRow = React.memo(({
           onChange={() => onToggle(team._id)}
           className="mr-3 w-4 h-4 rounded border-gray-600 text-purple-600 focus:ring-purple-500 bg-slate-700"
         />
+       
         <span className="text-gray-200 text-sm">{team.teamFullName}</span>
       </label>
     </div>

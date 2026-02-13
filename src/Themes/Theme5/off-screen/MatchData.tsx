@@ -105,7 +105,7 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
     <div className="w-[1920px] h-[1080px] text-white p-8">
       <div className="w-full h-[30%]">
         <div
-          className="px-6 py-2 font-bebas-neue text-[160px] leading-[1] absolute top-[50px] left-[190px] font-[700] bg-gradient-to-l from-[#ffa300] to-[#f9df67] text-transparent bg-clip-text drop-shadow-[0px_7px_10px_rgba(0,0,0,0.3)] scale-y-[1.4]">
+          className="px-6 py-2 font-[Awaking] tracking-wider text-[160px] leading-[1] absolute top-[50px] left-[190px] font-[700] bg-gradient-to-l from-[#ffa300] to-[#f9df67] text-transparent bg-clip-text drop-shadow-[0px_7px_10px_rgba(0,0,0,0.3)] scale-y-[1.4]">
           MATCH STANDINGS
         </div>
 
@@ -125,7 +125,7 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
       <div className="w-full text-sm">
         {/* Header */}
         <div className="flex">
-          <div className="w-[800px] text-black text-[1.8rem] bg-white h-[40px] relative mb-[10px] left-[30px] font-bebas-neue pl-[30PX]">
+          <div className="w-[800px] text-black text-[1.8rem] bg-white h-[40px] relative mb-[10px] left-[30px] font-[supermolot] pl-[30PX] font-[700]">
             <div className="absolute top-[10px]">#</div>
             <div className="absolute top-[10px] left-[130px]">TEAM</div>
             <div className="absolute top-[10px] left-[370px]">WWCD</div>
@@ -133,7 +133,7 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
             <div className="absolute top-[10px] left-[600px]">KILLS</div>
             <div className="absolute top-[10px] left-[720px]">TOTAL</div>
           </div>
-          <div className="w-[800px] text-black text-[1.8rem] bg-white h-[40px] relative mb-[10px] left-[160px] font-bebas-neue pl-[30PX]">
+          <div className="w-[800px] text-black text-[1.8rem] bg-white h-[40px] relative mb-[10px] left-[160px] font-[supermolot] pl-[30PX] font-[700]">
             <div className="absolute top-[10px]">#</div>
             <div className="absolute top-[10px] left-[130px]">TEAM</div>
             <div className="absolute top-[10px] left-[370px]">WWCD</div>
@@ -145,7 +145,7 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
 
         {/* 🥇 Top 1 Team Highlighted */}
         {sortedTeams.length > 0 && (
-          <div className="grid grid-cols-7 text-center bg-[#000000c1] w-[1600px] h-[180px] left-[100px] ml-[100px] font-bold shadow-lg scale-[1.01] mb-2 mt-[80px]">
+          <div className="grid grid-cols-7 text-center bg-[#000000c1] w-[1600px] h-[180px] left-[100px] ml-[100px] font-bold shadow-lg scale-[1.01] mb-2 mt-[80px] font-[AGENCYB]">
             <div className="flex relative top-[-86px] left-[60px]">
               {topTeam?.players.map((player, idx) => (
                 <img
@@ -156,7 +156,7 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
                 />
               ))}
 
-              <div className="text-white text-[55px] absolute left-[650px] top-[220px] font-russo">{topTeam?.teamName}</div>
+              <div className="text-white text-[55px] absolute left-[670px] top-[220px] font-russo">{topTeam?.teamTag}</div>
               {topTeam?.teamLogo ? (
                 <img
                   src={topTeam.teamLogo}
@@ -173,23 +173,28 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
 
             <div className="flex flex-row gap-[70px] relative left-[700px] top-[50px] font-russo">
               <div className="text-[30px]">
-                <div className="mb-[30px]">{topTeam?.wwcd || 0}</div>
-                <div className="w-[110px] h-[2px] bg-white absolute left-[-7px] top-[40px]"></div>
-                <div className="ml-[10px]">WWCD</div>
+                <div className="mb-[30px] flex gap-1">
+                  {Number(topTeam?.placePoints) === 10 ? (
+                    <img src="/chicken.avif" alt="WWCD" className="w-8 h-8 object-contain invert" />
+                  ) : (
+                    <span className='text-green-500'>wwcd</span>
+                  )}
+                </div>
+          
               </div>
-              <div className="text-[30px]">
-                <div className="mb-[30px]">{topTeam?.placePoints}</div>
-                <div className="w-[110px] h-[2px] bg-white absolute left-[180px] top-[40px]"></div>
+              <div className="text-[30px] ">
+                <div className="mb-[30px] text-[50px]">{topTeam?.placePoints}</div>
+                <div className="w-[110px] h-[2px] bg-white absolute left-[50px] top-[40px]"></div>
                 <div className="ml-[7px]">PLACE</div>
               </div>
               <div className="text-[30px]">
-                <div className="mb-[30px]">{topTeam?.totalKills}</div>
-                <div className="w-[110px] h-[2px] bg-white absolute left-[350px] top-[40px]"></div>
+                <div className="mb-[30px] text-[50px]">{topTeam?.totalKills}</div>
+                <div className="w-[110px] h-[2px] bg-white absolute left-[200px] top-[40px]"></div>
                 <div className="ml-[10px]">KILLS</div>
               </div>
               <div className="text-[30px]">
-                <div className="mb-[30px]">{topTeam?.total}</div>
-                <div className="w-[110px] h-[2px] bg-white absolute left-[520px] top-[40px]"></div>
+                <div className="mb-[30px] text-[50px]">{topTeam?.total}</div>
+                <div className="w-[110px] h-[2px] bg-white absolute left-[330px] top-[40px]"></div>
                 <div className="ml-[12px]">TOTAL</div>
               </div>
             </div>
@@ -197,11 +202,11 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
         )}
 
         {/* 🏅 Teams #2 and onward in grid-cols-2 layout */}
-        <div className="grid grid-cols-2 gap-x-[-195px] gap-y-[10px] w-[100%] h-[100%] relative left-[30px]">
+        <div className="grid grid-cols-2 gap-x-[-195px] gap-y-[10px] w-[100%] h-[100%] relative left-[30px] font-[AGENCYB]">
           {visibleData.slice(1).map((team, index) => (
             <motion.div
               key={`${page}-${index}`}
-              className="w-[800px] h-[80px] flex items-center font-russo bg-[#000000c1] gap-x-1 p-2 text-[30px]"
+              className="w-[800px] h-[80px] flex items-center font-[AGENCYB] bg-[#000000c1] gap-x-1 p-2 text-[30px]"
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
@@ -210,8 +215,8 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
                 delay: index * 0.2,
               }}
             >
-              <div className="w-[5%] text-center pl-[20px]">{(page - 1) * pageSize + index + 2}</div>
-              <div className="w-[25%] text-center pl-[20px]">{team.teamName}</div>
+              <div className="w-[5%] text-center pl-[20px] font-[AGENCYB]">{(page - 1) * pageSize + index + 2}</div>
+              <div className="w-[25%] text-center pl-[20px] font-[AGENCYB]">{team.teamTag}</div>
               <div className="w-[10%] text-center pl-[20px]">
                 {team.teamLogo ? (
                   <img
@@ -223,7 +228,13 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
                   <span className="text-gray-500">N/A</span>
                 )}
               </div>
-              <div className="w-[15%] text-center pl-[26px]">{team.wwcd || 0}</div>
+              <div className="w-[15%] text-center pl-[26px] flex justify-center">
+                {Number(team.placePoints) === 10 ? (
+                  <img src="/chicken.avif" alt="WWCD" className="w-6 h-6 object-contain" />
+                ) : (
+                  <span></span>
+                )}
+              </div>
               <div className="w-[15%] text-center pl-[20px]">{team.placePoints}</div>
               <div className="w-[15%] text-center pl-[20px]">{team.totalKills}</div>
               <div className="w-[15%] text-center pl-[20px]">{team.total}</div>
