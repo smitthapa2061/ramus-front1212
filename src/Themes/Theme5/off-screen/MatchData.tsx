@@ -102,7 +102,7 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
   const visibleData = sortedTeams.slice(startIndex, startIndex + pageSize);
 
   return (
-    <div className="w-[1920px] h-[1080px] text-white p-8">
+    <div className="w-[1920px] h-[1080px] text-white p-8 ">
       <div className="w-full h-[30%]">
         <div
           className="px-6 py-2 font-[Awaking] tracking-wider text-[160px] leading-[1] absolute top-[50px] left-[190px] font-[700] bg-gradient-to-l from-[#ffa300] to-[#f9df67] text-transparent bg-clip-text drop-shadow-[0px_7px_10px_rgba(0,0,0,0.3)] scale-y-[1.4]">
@@ -114,7 +114,7 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
             backgroundImage: `linear-gradient(to left, transparent, ${tournament.primaryColor})`,
             clipPath: "polygon(30px 0%, 100% 0%, 100% 100%, 30px 100%, 0% 50%)",
           }}
-          className="w-[1000px] h-[60px] absolute left-[240px] top-[240px] text-white font-bebas-neue font-[100] text-[3rem] tracking-wide"
+          className="w-[1000px] h-[50px] absolute left-[240px] top-[260px] text-white font-[AGENCYB] font-[100] text-[2.5rem] tracking-wide"
         >
           <div className="relative top-[-5px] left-[50px]">
             {tournament.tournamentName} - {round?.roundName} - POST MATCH - {match?.matchNo}
@@ -145,7 +145,7 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
 
         {/* 🥇 Top 1 Team Highlighted */}
         {sortedTeams.length > 0 && (
-          <div className="grid grid-cols-7 text-center bg-[#000000c1] w-[1600px] h-[180px] left-[100px] ml-[100px] font-bold shadow-lg scale-[1.01] mb-2 mt-[80px] font-[AGENCYB]">
+          <div className="grid grid-cols-7 text-center bg-[#000000c1] w-[1600px] h-[180px] left-[100px] ml-[100px] font-bold shadow-lg scale-[1.01] mb-2 mt-[10px] font-[AGENCYB]">
             <div className="flex relative top-[-86px] left-[60px]">
               {topTeam?.players.map((player, idx) => (
                 <img
@@ -222,6 +222,7 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
                   <img
                     src={team.teamLogo}
                     alt={team.teamName}
+                   
                     className="w-12 h-12 mx-auto object-contain"
                   />
                 ) : (

@@ -203,7 +203,7 @@ const OverAllDataComponent: React.FC<OverAllDataProps> = ({ tournament, round, m
           clipPath: "polygon(40px 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%)",
         }}
       >
-        OVERALL STANDINGS
+        OVERALL STANDING
       </div>
 
       {/* Info Strip */}

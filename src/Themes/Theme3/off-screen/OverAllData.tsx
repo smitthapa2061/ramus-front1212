@@ -14,13 +14,29 @@ interface Tournament {
 interface Round {
   _id: string;
   roundName: string;
+  apiEnable?: boolean;
   day?: string;
+}
+
+interface Match {
+  _id: string;
+  matchName?: string;
+  matchNo?: number;
 }
 
 interface Player {
   _id: string;
+  uId: string;
   playerName: string;
   killNum: number;
+  bHasDied: boolean;
+  picUrl?: string;
+  damage?: string;
+  survivalTime?: number;
+  assists?: number;
+  health: number;
+  healthMax: number;
+  liveState: number;
 }
 
 interface Team {
@@ -34,10 +50,10 @@ interface Team {
   players: Player[];
   matchesPlayed?: number;
   totalKills?: number;
-  total?: number;
+  totalScore?: number;
   rank?: number;
-  pointsChange?: number; // points gained this match
-  leadOverNext?: number; // only for rank 1: lead over rank 2
+  rankChange?: number;
+  totalPlacePoints?: number;
 }
 
 interface OverallData {
@@ -46,12 +62,6 @@ interface OverallData {
   userId: string;
   teams: Team[];
   createdAt: string;
-}
-
-interface Match {
-  _id: string;
-  matchName?: string;
-  matchNo?: number;
 }
 
 interface MatchData {
@@ -69,208 +79,218 @@ interface OverAllDataProps {
   matchDatas?: MatchData[];
 }
 
+// Helper function to compute ranking from match data
+const computeRanking = (matches: MatchData[]) => {
+  const map = new Map<string, any>();
 
+  matches.forEach(match => {
+    match.teams.forEach(team => {
+      const kills = team.players.reduce((s, p) => s + (p.killNum || 0), 0);
+      const place = team.placePoints || 0;
+      const score = kills + place;
 
-// ... all imports and interfaces remain the same
-
-const OverAllDataComponent: React.FC<OverAllDataProps> = ({ tournament, round, match, matchData, overallData: propOverallData, matches: propMatches, matchDatas: propMatchDatas }) => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [previousTotals, setPreviousTotals] = useState<Map<string, number>>(new Map());
-  const [processedOverallData, setProcessedOverallData] = useState<OverallData | null>(null);
-
-  const overallData = propOverallData;
-  const matches = propMatches || [];
-  const matchDatas = propMatchDatas || [];
-
-  useEffect(() => {
-    if (overallData) {
-      // Calculate matches played for each team
-      const teamMatchesPlayed = new Map<string, number>();
-      // Always count the selected match
-      if (matchData) {
-        const hasTenPlacePoints = matchData.teams.some((team: any) => team.placePoints === 10);
-        if (hasTenPlacePoints) {
-          matchData.teams.forEach((team: any) => {
-            if (team.players && team.players.length > 0) {
-              const teamId = team.teamId;
-              teamMatchesPlayed.set(teamId, (teamMatchesPlayed.get(teamId) || 0) + 1);
-            }
-          });
-        }
+      if (!map.has(team.teamId)) {
+        map.set(team.teamId, {
+          teamId: team.teamId,
+          teamName: team.teamName,
+          teamTag: team.teamTag,
+          teamLogo: team.teamLogo,
+          totalKills: kills,
+          totalPlacePoints: place,
+          totalScore: score,
+          wwcd: team.wwcd || 0,
+        });
+      } else {
+        const t = map.get(team.teamId);
+        t.totalKills += kills;
+        t.totalPlacePoints += place;
+        t.totalScore += score;
+        t.wwcd += team.wwcd || 0;
       }
-      // Count other matches
-      matchDatas.forEach((matchDataItem) => {
-        if (matchData && matchDataItem._id === matchData._id) return; // Skip if it's the selected match
-        const hasTenPlacePoints = matchDataItem.teams.some((team: any) => team.placePoints === 10);
-        if (hasTenPlacePoints) {
-          matchDataItem.teams.forEach((team: any) => {
-            if (team.players && team.players.length > 0) {
-              const teamId = team.teamId;
-              teamMatchesPlayed.set(teamId, (teamMatchesPlayed.get(teamId) || 0) + 1);
-            }
-          });
-        }
+    });
+  });
+
+  const arr = Array.from(map.values());
+
+  arr.sort((a, b) => {
+    if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+    if (b.totalPlacePoints !== a.totalPlacePoints) return b.totalPlacePoints - a.totalPlacePoints;
+    if (b.totalKills !== a.totalKills) return b.totalKills - a.totalKills;
+    return b.wwcd - a.wwcd;
+  });
+
+  return arr;
+};
+
+const OverAllData: React.FC<OverAllDataProps> = ({ 
+  tournament, 
+  round, 
+  overallData,
+  matchDatas = []
+}) => {
+  const [page, setPage] = useState(1);
+
+  // Calculate team rankings with rank change
+  const teamRankings = useMemo(() => {
+    if (matchDatas.length === 0 && !overallData) return [];
+
+    // If we have matchDatas, use the new ranking calculation
+    if (matchDatas.length > 0) {
+      const sortedMatches = [...matchDatas];
+
+      // Ranking including all matches
+      const currentRanking = computeRanking(sortedMatches);
+
+      // Ranking without last match
+      const previousMatches = sortedMatches.slice(0, -1);
+      const previousRanking = previousMatches.length > 0 ? computeRanking(previousMatches) : [];
+
+      const prevRankMap = new Map<string, number>();
+      previousRanking.forEach((team, index) => {
+        prevRankMap.set(team.teamId, index + 1);
       });
 
-      // Update totals and calculate additional fields
-      const updatedTeams = overallData.teams.map((team: any) => {
-        const totalKills = team.players.reduce((sum: number, p: any) => sum + (p.killNum || 0), 0);
-        const total = totalKills + team.placePoints;
-        const matchesPlayed = teamMatchesPlayed.get(team.teamId) || 0;
+      // Attach rank change
+      const result = currentRanking.map((team, index) => {
+        const currentRank = index + 1;
+        const previousRank = prevRankMap.get(team.teamId) || currentRank;
+
         return {
           ...team,
-          totalKills,
-          total,
-          matchesPlayed,
+          rank: currentRank,
+          rankChange: previousRank - currentRank
         };
       });
 
-      // Sort by total descending
-      updatedTeams.sort((a: any, b: any) => {
-        if (b.total !== a.total) return b.total - a.total;
-        if (b.placePoints !== a.placePoints) return b.placePoints - a.placePoints;
-          if ((b.wwcd || 0) !== (a.wwcd || 0)) return (b.wwcd || 0) - (a.wwcd || 0); // 3️⃣ tie → higher WWCD first
-  return (b.totalKills || 0) - (a.totalKills || 0);
-      });
-
-      // Calculate pointsChange and leadOverNext
-      const newTotals = new Map<string, number>();
-      updatedTeams.forEach((team: any, index: number) => {
-        team.rank = index + 1;
-        const prevTotal = previousTotals.get(team.teamId) || 0;
-        team.pointsChange = team.total - prevTotal;
-
-        // leadOverNext for all teams: difference to next rank
-        if (index < updatedTeams.length - 1) {
-          const nextTeam = updatedTeams[index + 1];
-          team.leadOverNext = team.total - nextTeam.total;
-        } else {
-          team.leadOverNext = 0; // last place has no next
-        }
-
-        newTotals.set(team.teamId, team.total);
-      });
-
-      setPreviousTotals(newTotals);
-      setProcessedOverallData({ ...overallData, teams: updatedTeams });
-      setLoading(false);
-    } else {
-      setLoading(false);
+      return result;
     }
-  }, [overallData, previousTotals, matches]);
 
-  // Pagination - Show 2, 3, 4, etc. teams per page
-  const [currentPage, setCurrentPage] = useState(0);
-  const teamsPerPage = 8;
-  const totalPages = processedOverallData ? Math.ceil(processedOverallData.teams.length / teamsPerPage) : 0;
+    // Fallback to overallData if no matchDatas
+    if (overallData?.teams) {
+      const teams = overallData.teams.map(team => ({
+        ...team,
+        totalKills: team.players?.reduce((sum, p) => sum + (p.killNum || 0), 0) || 0,
+        totalPlacePoints: team.placePoints || 0,
+        totalScore: (team.players?.reduce((sum, p) => sum + (p.killNum || 0), 0) || 0) + (team.placePoints || 0),
+        rankChange: 0
+      }));
+
+      return teams.sort((a, b) => {
+        if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+        if (b.totalPlacePoints !== a.totalPlacePoints) return b.totalPlacePoints - a.totalPlacePoints;
+        if (b.totalKills !== a.totalKills) return b.totalKills - a.totalKills;
+        return (b.wwcd || 0) - (a.wwcd || 0);
+      });
+    }
+
+    return [];
+  }, [overallData, matchDatas]);
+
+  const pageSize = 8; // Show 8 rows per page
+  const totalPages = Math.ceil(teamRankings.length / pageSize);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentPage(prev => (prev + 1) % totalPages);
-    }, 25000);
-    return () => clearInterval(interval);
-  }, [totalPages]);
+    if (totalPages > 0) {
+      const interval = setInterval(() => {
+        setPage((prev) => (prev % totalPages) + 1); // cycle pages 1 → totalPages → 1
+      }, 15000); // change every 15 seconds
 
-  const paginatedTeams = useMemo(() => {
-    if (!processedOverallData) return [];
-    const start = currentPage * teamsPerPage;
-    return processedOverallData.teams.slice(start, start + teamsPerPage);
-  }, [processedOverallData, currentPage, teamsPerPage]);
+      return () => clearInterval(interval);
+    }
+  }, [teamRankings]);
 
-  if (loading) return <div>Loading...</div>;
-  if (error || !processedOverallData) return <div>{error || 'No data available'}</div>;
+  const startIndex = (page - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const visibleData = teamRankings.slice(startIndex, endIndex);
+
+  if (!overallData && matchDatas.length === 0) {
+    return (
+      <div className="w-[1920px] h-[1080px] flex items-center justify-center">
+        <div className="text-white text-2xl font-[Righteous]">No overall data available</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-[1920px] h-[1080px] flex justify-center relative">
-      {/* Header */}
-      <div className="absolute top-[0px] right-[250px] text-white flex justify-end w-[100%]">
-        <div className='text-[6rem] font-bebas relative right-[250px]'>OVERALL STANDINGS</div>
+    <div className="w-[1920px] h-[1080px]">
+      <div className="w-full h-[30%]">
+        <div className="px-6 py-2 font-[Awaking] text-[160px] leading-[1] absolute top-[40px] left-[230px] font-[700] bg-gradient-to-l from-[#ffa300] to-[#f9df67] text-transparent bg-clip-text drop-shadow-[0px_7px_10px_rgba(0,0,0,0.3)]  tracking-wider">
+          OVERALL STANDINGS
+        </div>
+
         <div
           style={{
-            backgroundImage: `linear-gradient(to left, transparent, ${tournament.primaryColor})`,
+            backgroundImage: `linear-gradient(to left, transparent, ${tournament.primaryColor || '#ffa300'})`,
             clipPath: "polygon(30px 0%, 100% 0%, 100% 100%, 30px 100%, 0% 50%)",
           }}
-          className="w-[900px] h-[60px] absolute left-[1090px] top-[120px] text-white font-bebas-neue"
+          className="w-[1400px] h-[50px] absolute left-[240px] top-[230px] text-white font-[supermolot] font-[700] text-[2rem] tracking-wide"
         >
-          <div className="relative left-[50px] font-[Righteous] text-[2rem] top-[4px]">
-            {tournament.tournamentName} | {round?.roundName || 'No Round'}
+          <div className="relative top-[px] left-[50px]">
+            {tournament.tournamentName} - {round?.roundName || ''} 
           </div>
         </div>
       </div>
 
-      {/* Teams */}
-      <div className="absolute top-[200px] w-[1600px] ">
-        <div className="bg-gradient-to-r from-[#FFD700] via-[#FFA500] to-[#FFD700] w-[100%] h-[50px] mb-[15px]">
-          <div className="flex items-center text-black font-bold text-[1.8rem] font-[Righteous]  pt-[5px]">
-            <span className="ml-[0px] w-[80px] text-center absolute">#</span>
-            <span className="w-[200px] text-center ml-[150px]">TEAM</span>
-            <span className="w-[100px] text-center ml-[300px] relative left-[60px]">MATCHES</span>
-            <span className="w-[200px] text-center ml-[120px]">KILLS</span>
-            <span className="w-[250px] text-center ml-[0px] relative left-[-10px]">PLACE</span>
-            <span className="w-[100px] text-center ml-[50px] left-[-40px] relative ">TOTAL</span>
-            <span className="w-[100px] text-center ml-[50px] relative left-[-30px]">WWCD</span>
-            <span className="w-[200px] text-center relative  left-[0px]">PTS DIFF</span>
-          </div>
+      <div className="pt-[30px] ">
+        <div 
+          className="w-[1400px] h-[37px] bg-white absolute left-[220px] top-[303px] flex text-[24px] font-[supermolot] font-[900]"
+        >
+          <div className="ml-[25px] text-[20px] font-bold">
+  ▲▼
+</div>
+          <div className="ml-[40px]">#</div>
+          <div className="ml-[130px]">TEAM</div>
+          <div className="ml-[580px]">WWCD</div>
+          <div className="ml-[60px]">PLACE</div>
+          <div className="ml-[90px]">KILL</div>
+          <div className="ml-[80px]">TOTAL</div>
         </div>
-
-        {paginatedTeams.map((team, index) => (
+        {visibleData.map((team, index) => (
           <motion.div
-            key={team.teamId}
-            className="w-full h-[80px] flex items-center text-black font-bold mb-[10px] bg-gradient-to-r from-[#cdcdcd] via-[#fbfbfb] to-[#afafaf]"
-            initial={{ opacity: 0, y: -30 }}
+            key={`${page}-${index}`}
+            className="mb-0 w-[1900px] h-[80px] relative left-[220px] top-[5px] flex items-center font-russo"
+            initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.3, duration: 0.6, ease: "easeOut" }}
+            transition={{
+              duration: 0.5,
+              ease: "easeOut",
+              delay: index * 0.2,
+            }}
           >
-            {/* Rank */}
-            <div
-              className="h-full w-[80px] flex items-center justify-center text-white font-[300] text-[3rem] font-bebas"
-              style={{
-                background: `linear-gradient(135deg, ${tournament.primaryColor || '#000'}, ${tournament.secondaryColor || '#333'})`,
-              }}
-            >
-              {team.rank}
-            </div>
-
-            {/* Logo */}
-            <div className="w-[50px] flex items-center justify-center ml-[15px]">
-              <img
-                src={team.teamLogo || "https://res.cloudinary.com/dqckienxj/image/upload/v1727161652/default_nuloh2.png"}
-                alt={team.teamTag}
-                className="w-[100%]"
+            <div className="bg-[#000000d2] w-[1400px] h-[70px] flex items-center px-4 text-white font-[AGENCYB]">
+              {/* Rank Change */}
+              <div className="w-[60px] text-[1.8rem] font-bold ml-[10px]">
+                {team.rankChange > 0 && (
+                  <span className="text-green-400">+{team.rankChange}</span>
+                )}
+                {team.rankChange === 0 && (
+                  <span className="text-gray-400">0</span>
+                )}
+                {team.rankChange < 0 && (
+                  <span className="text-red-400">{team.rankChange}</span>
+                )}
+              </div>
+              {/* Rank */}
+              <div className="w-[60px] text-[2.5rem] font-bold ml-[10px]">{index + 1 + (page - 1) * pageSize}</div>
+              <img 
+                src={team.teamLogo || 'https://res.cloudinary.com/dqckienxj/image/upload/v1730785916/default_ryi6uf_edmapm.png'} 
+                alt="logo" 
+                className="h-[50px] w-[60px] object-contain" 
               />
-            </div>
-
-            {/* Name */}
-            <div className="flex-1 ml-4 font-[300] text-[3rem] flex items-center h-[100%]">
               <div
                 style={{
-                  background: `linear-gradient(135deg, ${tournament.primaryColor || '#000'}, ${tournament.secondaryColor || '#333'})`,
+                  backgroundImage: `linear-gradient(to bottom right, ${tournament.primaryColor || '#ffa300'}, ${tournament.secondaryColor || '#f9df67'})`
                 }}
-                className='w-[500px] h-[100%] items-center flex pl-[10px] font-bebas text-white'
+                className="w-[600px] text-[2.5rem] font-semibold ml-[20px] h-[100%]"
               >
-                {team.teamName}
+                <div className="mt-[2px] ml-[20px] font-[AGENCYB]">{team.teamName || team.teamTag}</div>
               </div>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-6 font-[300] text-[3rem] font-bebas w-[60%] h-[105%] text-center items-center">
-              <span>{team.matchesPlayed}</span>
-              <span>{team.totalKills}</span>
-              <span>{team.placePoints}</span>
-              <span>{team.total}</span>
-              <span>{team.wwcd || 0}</span>
-              <span  style={{
-    background: `linear-gradient(135deg, ${tournament.primaryColor || '#000'}, ${tournament.secondaryColor || '#333'})`,
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text', // for some browsers
-
-  }}>
-                {team.rank === 1
-                  ? `${team.leadOverNext || 0}`
-                  : `${team.leadOverNext || 0}`}
-              </span>
+              <div className="absolute left-[850px] flex text-[2.5rem] font-bold">
+                <div className="w-[140px] text-center font-[AGENCYB]">{team.wwcd || 0}</div> {/* WWCD */}
+                <div className="w-[140px] text-center font-[AGENCYB]">{team.totalPlacePoints || team.placePoints || 0}</div> {/* Placement */}
+                <div className="w-[140px] text-center font-[AGENCYB]">{team.totalKills || 0}</div> {/* Kills */}
+                <div className="w-[140px] text-center font-[AGENCYB]">{team.totalScore || 0}</div> {/* Total */}
+              </div>
             </div>
           </motion.div>
         ))}
@@ -279,5 +299,4 @@ const OverAllDataComponent: React.FC<OverAllDataProps> = ({ tournament, round, m
   );
 };
 
-
-export default OverAllDataComponent;
+export default OverAllData;
