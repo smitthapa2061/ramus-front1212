@@ -88,6 +88,8 @@ const computeRanking = (matches: MatchData[]) => {
       const kills = team.players.reduce((s, p) => s + (p.killNum || 0), 0);
       const place = team.placePoints || 0;
       const score = kills + place;
+      // Count WWCD if placePoints is 10 (indicates 1st place finish)
+      const isWWCD = team.placePoints === 10 ? 1 : 0;
 
       if (!map.has(team.teamId)) {
         map.set(team.teamId, {
@@ -98,14 +100,14 @@ const computeRanking = (matches: MatchData[]) => {
           totalKills: kills,
           totalPlacePoints: place,
           totalScore: score,
-          wwcd: team.wwcd || 0,
+          wwcd: isWWCD,
         });
       } else {
         const t = map.get(team.teamId);
         t.totalKills += kills;
         t.totalPlacePoints += place;
         t.totalScore += score;
-        t.wwcd += team.wwcd || 0;
+        t.wwcd += isWWCD;
       }
     });
   });
@@ -242,7 +244,7 @@ const OverAllData: React.FC<OverAllDataProps> = ({
           <div className="ml-[130px]">TEAM</div>
           <div className="ml-[580px]">WWCD</div>
           <div className="ml-[60px]">PLACE</div>
-          <div className="ml-[90px]">KILL</div>
+          <div className="ml-[80px]">KILL</div>
           <div className="ml-[80px]">TOTAL</div>
         </div>
         {visibleData.map((team, index) => (
