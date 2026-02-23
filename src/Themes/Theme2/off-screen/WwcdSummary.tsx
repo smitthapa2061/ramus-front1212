@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import SocketManager from '../../../dashboard/socketManager.tsx';
+import Teams from 'dashboard/MainTeams.tsx';
 
 interface Tournament {
   _id: string;
@@ -87,7 +88,7 @@ const WwcdSummary: React.FC<WwcdSummaryProps> = ({ tournament, round, match, mat
 
     const handlers = {
       handleLiveUpdate: (data: any) => {
-        if (data.matchId?.toString() === match._id?.toString()) {
+        if (data._id?.toString() === matchDataId) {
           setLocalMatchData(data);
           setLastUpdateTime(Date.now());
         }
@@ -198,12 +199,14 @@ const WwcdSummary: React.FC<WwcdSummaryProps> = ({ tournament, round, match, mat
           total: totalKills + (Number(team.placePoints) || 0),
         };
       })
-      .filter((team) => Number(team.placePoints) === 10)
+      .filter((team) => Number(team.placePoints) === 10 || Number(team.placePoints) === 12)
       .sort((a, b) => {
         if (b.placePoints !== a.placePoints) return (b.placePoints || 0) - (a.placePoints || 0);
         return (b.total || 0) - (a.total || 0);
       });
   }, [localMatchData, lastUpdateTime]);
+
+  const winner = teamsWithTotals[0];
 
   if (!localMatchData) {
     return (
@@ -213,100 +216,75 @@ const WwcdSummary: React.FC<WwcdSummaryProps> = ({ tournament, round, match, mat
     );
   }
 
+  // Get top 4 players from the winning team
+  const topPlayers = winner?.players
+    .filter(player => player.picUrl) // Filter players with pictures
+    .sort((a, b) => (b.killNum || 0) - (a.killNum || 0)) // Sort by kills
+    .slice(0, 4); // Get top 4 players
+
+  // Debug: Log player data
+  console.log('Winner:', winner?.teamTag, 'Top players:', topPlayers?.length, topPlayers?.map(p => ({ name: p.playerName, pic: p.picUrl })));
+
   return (
-    <div className="w-[1920px] h-[1080px] relative overflow-hidden ">
-      {/* Header */}
-      <motion.div
-        className="absolute z-10 text-center left-[600px] top-[0px] text-[5rem] font-bebas font-[300]"
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
-      >
-        <h1 className="text-white font-bold whitespace-pre text-[8rem]">BOOYAH SUMMARY</h1>
-        {round && match && (
-          <motion.p
-            className="text-gray-300 text-[2rem] font-[Righteous] whitespace-pre p-[10px] mt-[-30px] w-[670px]"
-            style={{ background: `linear-gradient(45deg, ${tournament.primaryColor || '#000'}, ${tournament.secondaryColor || '#333'})` }}
-            animate={{ backgroundColor: ['rgba(255,0,0,0.25)', 'rgba(255,0,0,0.45)', 'rgba(255,0,0,0.25)'] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            {`${round.roundName} - DAY${(round as any).day ? ` ${(round as any).day}` : ''} - ${match.matchName ? match.matchName : `Match ${match.matchNo || match._matchNo}`}`}
-          </motion.p>
-        )}
-      </motion.div>
-
-      {/* Teams */}
-      <div className="absolute inset-x-0 top-[150px] px-10 w-full">
-        {teamsWithTotals.length === 0 ? (
-          <div className="text-center text-white font-[Righteous] text-3xl w-full h-full">
-            No team with placement points 10
-          </div>
-        ) : (
-          teamsWithTotals.map((team) => {
-            const { totalKills, totalDamage, totalAssists } = team as any;
-            return (
-              <motion.div
-                key={(team as any)._id || (team as any).teamId}
-                className="flex justify-center items-center w-full h-[800px] mt-[130px] relative"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4 }}
-              >
-                <div className="flex w-full h-full ">
-                  {team.players.slice(0, 4).map((player) => (
-                    <div key={player._id} className="flex h-full w-[10000px]  relative">
-                      <img
-                        src={player.picUrl || "/def_char.png"}
-                        alt={player.playerName}
-                        className="object-cover h-[510px] absolute top-[180px] scale-150"
-                      />
-                    </div>
-                  ))}
-
-                  {/* Bottom gradient */}
-                  <div
-                    className="absolute inset-x-0 bottom-0 h-[350px] w-[2120px]  left-[-200px]"
-                    style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.99), rgba(0,0,0,0))', pointerEvents: 'none' }}
-                  />
-
-                  {/* Team info */}
-                  <div className="w-[400px] h-[100px] absolute top-[620px] left-[560px] flex">
-                    <div className="w-[350px] h-full bg-white">
-                      <img src={team.teamLogo} alt="" className="w-full h-full" />
-                    </div>
-                    <div
-                      style={{ background: `linear-gradient(45deg, ${tournament.primaryColor || '#000'}, ${tournament.secondaryColor || '#333'})` }}
-                      className="w-[1000px] h-full text-[4rem] font-bebas text-white p-[10px] flex justify-center items-center"
-                    >
-                      {team.teamTag}
-                    </div>
-                    
-<div className=' w-full bg-white h-full absolute top-[0px] left-[450px]'>
-<div className='w-[150px] h-full text-[2rem] absolute  flex justify-center items-center'  style={{ background: `linear-gradient(45deg, ${tournament.primaryColor || '#000'}, ${tournament.secondaryColor || '#333'})` }}>
-
-<span className='text-[4rem] absolute top-[10px]  font-bebas text-white flex justify-center items-center'> KILLS</span>
-
-</div>
- <span className='text-[5rem] absolute top-[-5pxpx]  font-bebas text-black flex justify-center items-center left-[200px]'> {totalKills}</span>
-
-
-</div>
-
-
-
+  <div className=' w-[1920px] h-[1080px] '>
+    <div
+     style={{
+   backgroundImage: `linear-gradient(135deg, ${
+ tournament.secondaryColor || '#000'
+}, #000)`,
+   WebkitBackgroundClip: 'text',
+   WebkitTextFillColor: 'transparent',
+ }}
+   className='text-white text-[10rem] font-[agencyb] absolute left-[500px] top-[0px]'>
+     <div>BOOYAH BOOYAH</div>
+     <div>BOOYAH BOOYAH</div>
+     
+   </div>
+ 
+     <div
+    style={{
+    border: "2px solid",
+    borderImage: `linear-gradient(135deg, ${
+      tournament.primaryColor || "#000"
+    }, #000) 1`,
+  }}
+      className='bg-white w-[350px] h-[130px] absolute left-[760px] top-[540px] flex '>
+        <div
         
-        
-                  </div>
-
-                  {/* Team summary box */}
-       
-                </div>
-              </motion.div>
-            );
-          })
-        )}
+        className='w-full h-[100%]'
+           style={{
+   backgroundImage: `linear-gradient(135deg, ${
+ tournament.secondaryColor || '#000'
+}, #000)`,
+  
+ }}>
+       <img 
+      
+       src={winner?.teamLogo ||  "/def_logo.png"} alt="" className='w-[150px] h-[100px] object-contain pl-[20px] ' />
+       </div>
+        <div className='text-black text-[79px] font-[agencyb]  text-center w-full'>{winner.teamTag}</div>
       </div>
-    </div>
+     
+   <div
+    key={winner?._id || winner?.teamId}
+     style={{
+  backgroundImage: `linear-gradient(135deg, ${
+ tournament.primaryColor || '#000'
+}, #000)`
+
+ }}
+   className='bg-black w-[900px] h-[130px] absolute left-[500px] top-[680px]'>
+<div className="text-white text-[76px] font-[agencyb] flex items-center gap-[100px] w-full ml-[210px]">
+ 
+ <span>{round?.roundName}</span>
+ <span>MATCH {match?.matchNo}</span>
+ 
+</div>
+
+   </div>
+   
+   
+  </div>
   );
 };
 

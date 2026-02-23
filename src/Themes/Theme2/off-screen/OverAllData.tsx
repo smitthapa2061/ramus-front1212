@@ -31,6 +31,7 @@ interface Team {
   slot: number;
   placePoints: number;
   wwcd?: number;
+  booyah?: number;
   players: Player[];
   matchesPlayed?: number;
   totalKills?: number;
@@ -85,12 +86,27 @@ const OverAllDataComponent: React.FC<OverAllDataProps> = ({ tournament, round, m
 
   useEffect(() => {
     if (overallData) {
-      // Calculate matches played for each team
+      // Calculate matches played and booyah count for each team
       const teamMatchesPlayed = new Map<string, number>();
+      const teamBooyah = new Map<string, number>();
+
       matchDatas.forEach((matchData) => {
         matchData.teams.forEach((team: any) => {
           const teamId = team.teamId;
-          teamMatchesPlayed.set(teamId, (teamMatchesPlayed.get(teamId) || 0) + 1);
+
+          // Matches played
+          teamMatchesPlayed.set(
+            teamId,
+            (teamMatchesPlayed.get(teamId) || 0) + 1
+          );
+
+          // BOOYAH logic (placePoints = 12 means rank 1)
+          if (team.placePoints === 12) {
+            teamBooyah.set(
+              teamId,
+              (teamBooyah.get(teamId) || 0) + 1
+            );
+          }
         });
       });
 
@@ -99,11 +115,13 @@ const OverAllDataComponent: React.FC<OverAllDataProps> = ({ tournament, round, m
         const totalKills = team.players.reduce((sum: number, p: any) => sum + (p.killNum || 0), 0);
         const total = totalKills + team.placePoints;
         const matchesPlayed = teamMatchesPlayed.get(team.teamId) || 0;
+        const booyah = teamBooyah.get(team.teamId) || 0;
         return {
           ...team,
           totalKills,
           total,
           matchesPlayed,
+          booyah,
         };
       });
 
@@ -235,7 +253,7 @@ const OverAllDataComponent: React.FC<OverAllDataProps> = ({ tournament, round, m
               <span>{team.totalKills}</span>
               <span>{team.placePoints}</span>
               <span>{team.total}</span>
-              <span>{team.wwcd || 0}</span>
+              <span>{team.booyah || 0}</span>
               <span  style={{
     background: `linear-gradient(135deg, ${tournament.primaryColor || '#000'}, ${tournament.secondaryColor || '#333'})`,
     WebkitBackgroundClip: 'text',

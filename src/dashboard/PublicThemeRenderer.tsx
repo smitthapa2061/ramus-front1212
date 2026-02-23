@@ -443,9 +443,9 @@ const PublicThemeRenderer: React.FC = () => {
 
         // Determine what data is needed based on the view
         const needsOverallData = ['OverAllData', 'OverallFrags', 'LiveStats', '1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'highlightPoints'].includes(view);
-        const needsMatches = ['OverAllData', 'Schedule', 'Lower', 'highlightPoints', 'HighlightSchedule'].includes(view);
-        const needsMatchDatas = ['OverAllData', 'Schedule', 'highlightPoints', 'HighlightSchedule'].includes(view);
-        const needsOverallWithMatch = ['OverallFrags'].includes(view);
+        const needsMatches = ['OverAllData', 'Schedule', 'Lower', 'highlightPoints', 'HighlightSchedule', 'OverallFrags'].includes(view);
+        const needsMatchDatas = ['OverAllData', 'Schedule', 'highlightPoints', 'HighlightSchedule', 'OverallFrags'].includes(view);
+        const needsOverallWithMatch = false; // OverallFrags uses round-level overall data, not match-specific
         const needsMatchData = ['Upper', 'Dom', 'Alerts', 'LiveStats', 'LiveFrags', 'MatchData', 'MatchFragrs', 'WwcdSummary', 'WwcdStats', 'playerH2H', 'mapPreview', 'slots', 'TeamH2H', 'mvp', 'RosterShowCase', 'MatchSummary', 'Champions','1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'PlayerSwitch'].includes(view);
         const needsBackpackInfo = ['MatchSummary', 'Upper', 'mvp'].includes(view);
 

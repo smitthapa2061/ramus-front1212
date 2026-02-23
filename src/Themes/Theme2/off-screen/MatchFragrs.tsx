@@ -426,15 +426,15 @@ const MatchFragrs: React.FC<MatchFragrsProps> = ({ tournament, round, match, mat
           <div className="flex items-center space-x-4 ">
           
             <div>
-              <h1 className="text-white   font-bold whitespace-pre text-[8rem] "
+              <h1 className=" font-bold font-[awaking] whitespace-pre text-[8rem]  bg-gradient-to-l from-[#ffa300] to-[#f9df67] text-transparent bg-clip-text drop-shadow-[0px_7px_10px_rgba(0,0,0,0.3)]  tracking-wider "
 
 
               >
-              TOP 5 FRAGGERS
+              TOP FRAGGERS
               </h1>
               {round && match && (
                 <motion.p
-                  className="text-gray-300 text-[2rem] font-[Righteous] whitespace-pre p-[10px]"
+                  className="text-white text-[3rem] font-[AGENCYB] whitespace-pre p-[0px]"
                   initial={{ backgroundColor: 'rgba(255,0,0,0.2)' }}
                   animate={{ backgroundColor: ['rgba(255,0,0,0.25)','rgba(255,0,0,0.45)','rgba(255,0,0,0.25)'] }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
@@ -443,7 +443,7 @@ const MatchFragrs: React.FC<MatchFragrsProps> = ({ tournament, round, match, mat
                   }}
                 >
               {renderTyped(
-  `${round.roundName} - DAY${(round as any).day ? ` ${round.day}` : ''} - Match ${match.matchNo || match._matchNo}`,
+  `${round.roundName} - DAY${(round as any).day ? ` ${round.day}` : ''} - MATCH ${match.matchNo || match._matchNo}`,
   undefined,
   0.35
 )}
@@ -514,6 +514,7 @@ const MatchFragrs: React.FC<MatchFragrsProps> = ({ tournament, round, match, mat
                 return (
                   <motion.div
                   style={{
+                      clipPath: "polygon(10% 2%, 100% -30%, 100% 80%, 85% 100%, 0 100%)",
                     background: `linear-gradient(45deg, ${tournament.primaryColor || '#000'}, ${tournament.secondaryColor || '#333'})`
                   }}
                     key={player._id}
@@ -529,7 +530,7 @@ const MatchFragrs: React.FC<MatchFragrsProps> = ({ tournament, round, match, mat
                     {/* Player Avatar */}
                     <div className="w-[300px] h-[300px] ml-[0px] absolute z-0">
                       <img
-                        src={player.picUrl || 'https://res.cloudinary.com/dqckienxj/image/upload/v1735718663/defult_chach_apsjhc_jydubc.png'}
+                        src={player.picUrl || '/def_char2.avif'}
                         alt={player.playerName}
                         className="w-full h-full "
                       />

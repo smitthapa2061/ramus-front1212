@@ -42,16 +42,7 @@ export default function Lower({ tournament, round, match }: LowerProps) {
           style={{ backgroundColor: tournament.primaryColor }}
         >
           {/* 🔥 Tournament Name Box */}
-          <div
-            className="bg-black text-[2.5rem] font-[500] px-6 rounded uppercase w-fit tracking-wide absolute top-[-23px] z-[999] right-6 text-white shadow-xl font-[righteous] skew-x-12"
-            style={{
-              backgroundColor: tournament.secondaryColor,
-              color: "white",
-            }}
-          >
-            {tournament.tournamentName}
-          </div>
-
+         
           {/* 🔥 Logo */}
           <div className="w-max h-full flex items-center justify-center">
             <img
@@ -63,7 +54,7 @@ export default function Lower({ tournament, round, match }: LowerProps) {
 
           {/* 🔥 Match + Day Box */}
           <div
-            className="w-4/6 h-full flex flex-col justify-center items-end px-4 text-white skew-x-12"
+            className="w-4/6 h-full flex flex-col justify-center items-end px-4 text-white "
             style={{
               clipPath:
                 "polygon(25% 0%, 100% 0%, 100% 100%, 0% 100%, 20% 30%, 0% 60%)",
@@ -72,19 +63,20 @@ export default function Lower({ tournament, round, match }: LowerProps) {
           >
             <div className="flex flex-col">
               {/* 🔥 Match Number */}
-              <div className="text-[6.2rem] font-bebas relative top-[20px] text-white">
-                Match {matchNumber}
+              <div className="text-[6.5rem]  absolute top-[0px] text-white font-[tungsten] left-[280px]">
+                MATCH {matchNumber}
               </div>
-
+<div className="w-[300px] h-[100%] flex justify-center mt-[100px] text-center">
               {/* 🔥 Day & Round */}
               <div
-                className="bg-black text-[1.1rem] font-[500] rounded uppercase w-[210px] h-[35px] font-[righteous] text-center top-[-18px] left-[20px] relative text-white pt-[4px]"
+                className=" text-[1.5rem] font-[500]  uppercase h-[35px] font-[AGENCYB]   px-[10px]  "
                 style={{
                   backgroundColor: tournament.secondaryColor,
                   color: "white",
                 }}
               >
-                DAY {round?.day} - {round?.roundName}
+                {tournament.tournamentName} - {round?.roundName}
+              </div>
               </div>
             </div>
           </div>

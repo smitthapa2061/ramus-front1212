@@ -274,7 +274,7 @@ const WwcdStats: React.FC<WwcdSummaryProps> = ({ tournament, round, match, match
           total: totalKills + (Number(team.placePoints) || 0),
         };
       })
-      .filter((team) => Number(team.placePoints) === 10)
+      .filter((team) => Number(team.placePoints) === 12)
       .sort((a, b) => {
         // Sort primarily by placePoints desc (WWCD more likely on top), then total desc
         if (b.placePoints !== a.placePoints) return (b.placePoints || 0) - (a.placePoints || 0);
@@ -305,10 +305,10 @@ const WwcdStats: React.FC<WwcdSummaryProps> = ({ tournament, round, match, match
         <div className="flex items-center justify-between ">
           <div className="flex items-center space-x-4">
             <div>
-              <h1 className="text-white font-bold whitespace-pre text-[8rem]">BOOYAH TEAM STATS</h1>
+              <h1 className=" font-bold whitespace-pre text-[8rem] bg-gradient-to-l from-[#ffa300] to-[#f9df67] text-transparent bg-clip-text drop-shadow-[0px_7px_10px_rgba(0,0,0,0.3)]  font-[Awaking] ">BOOYAH TEAM STATS</h1>
               {round && match && (
                 <motion.p
-                  className="text-gray-300 text-[2rem] font-[Righteous] whitespace-pre p-[10px] mt-[-30px]"
+                  className="text-white text-[2.5rem] font-[AGENCYB] whitespace-pre p-[0px] mt-[-30px]"
                   initial={{ backgroundColor: 'rgba(255,0,0,0.2)' }}
                   animate={{ backgroundColor: ['rgba(255,0,0,0.25)', 'rgba(255,0,0,0.45)', 'rgba(255,0,0,0.25)'] }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
@@ -362,7 +362,7 @@ const WwcdStats: React.FC<WwcdSummaryProps> = ({ tournament, round, match, match
           </div>
       <img
         key={player._id || idx}
-        src={player.picUrl}
+        src={player.picUrl || "/def_char2.avif"}
         alt={player.playerName}
      className="w-[300px] h-[350px] object-cover "
       />
@@ -406,7 +406,7 @@ const WwcdStats: React.FC<WwcdSummaryProps> = ({ tournament, round, match, match
           </div>
        <img
          key={player._id || idx}
-         src={player.picUrl || "https://res.cloudinary.com/dqckienxj/image/upload/v1761358753/defplayer_m7qexs.png"}
+         src={player.picUrl || "/def_char2.avif"}
          alt={player.playerName}
       className="w-[300px] h-[350px] object-cover "
        />

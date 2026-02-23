@@ -240,7 +240,7 @@ const rightTeams = pageTeams.slice(pageMid);
         {/* Team Logo */}
         <div className="w-[50px] flex items-center justify-center ml-[15px]">
           <img
-            src={team.teamLogo || "/def_logo.png"}
+            src={team.teamLogo || "/def_logo.avif"}
             alt={team.teamTag}
             className="w-[100%]"
           />

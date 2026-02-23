@@ -344,7 +344,7 @@ const MatchFragrs: React.FC<MatchFragrsProps> = ({ tournament, round, match, mat
                     {/* Player Avatar */}
                     <div className="w-[300px] h-[300px] ml-[0px] absolute z-0">
                       <img
-                        src={player.picUrl || '/def_char.png'}
+                        src={player.picUrl || '/def_char2.avif'}
                         alt={player.playerName}
                         className="w-full h-full "
                       />
