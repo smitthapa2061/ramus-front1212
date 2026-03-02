@@ -112,6 +112,7 @@ const OverallFrags: React.FC<OverallFragsProps> = ({
               appearances: 1,
               teamTag: team.teamTag,
               teamLogo: team.teamLogo,
+              teamName: team.teamName,
               teamPoints: team.placePoints,
               teamTotalKills: 0
             });
@@ -168,6 +169,7 @@ const OverallFrags: React.FC<OverallFragsProps> = ({
         killNum: player.totalKills,
         numericDamage: playerAvgDamage,
         assists: playerAvgAssists,
+          teamName: player.teamName,   // ✅ ADD THIS
         matchesPlayed: player.appearances,
         score,
         teamTotalKills,
