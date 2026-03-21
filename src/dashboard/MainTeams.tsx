@@ -1,7 +1,9 @@
-import React, { useState, useEffect, ChangeEvent, FormEvent, useCallback, useMemo, useDeferredValue, useTransition, startTransition } from 'react';
+import React, {
+  useState, useEffect, ChangeEvent, FormEvent,
+  useCallback, useMemo, useTransition, memo
+} from 'react';
 import { flushSync } from 'react-dom';
-import axios from 'axios';
-import { FaTrash, FaEdit, FaDiscord, FaWhatsapp, FaUpload } from 'react-icons/fa';
+import { FaTrash, FaEdit, FaDiscord, FaUpload, FaTrophy, FaUsers, FaEye } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import api from '../login/api.tsx';
 import { uploadToCloudinary } from '../utils/cloudinaryUpload.tsx';
@@ -21,22 +23,398 @@ interface Team {
   players: Player[];
 }
 
-const EMPTY_SET = new Set<string>();
+const CYBER_STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&display=swap');
+  .cyber-root * { font-family: 'Rajdhani', sans-serif; }
+  .orbitron { font-family: 'Orbitron', monospace; }
+  .sidebar-btn {
+    display: flex; flex-direction: column; align-items: center;
+    color: #6b7280; cursor: pointer;
+    padding: 10px; border-radius: 12px; width: 64px;
+    border: 1px solid transparent; background: transparent;
+    transition: color 0.2s, background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  }
+  .sidebar-btn:hover {
+    color: #4ade80; background: rgba(74,222,128,0.08);
+    border-color: rgba(74,222,128,0.3); box-shadow: 0 0 16px rgba(74,222,128,0.2);
+  }
+  .sidebar-btn.active {
+    color: #4ade80; background: rgba(74,222,128,0.12);
+    border-color: rgba(74,222,128,0.5); box-shadow: 0 0 20px rgba(74,222,128,0.3);
+  }
+  .glass-dark {
+    background: rgba(0,0,0,0.55); backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(74,222,128,0.3);
+  }
+  .neon-border {
+    border: 1px solid rgba(74,222,128,0.4);
+    box-shadow: 0 0 12px rgba(74,222,128,0.12), inset 0 0 10px rgba(74,222,128,0.03);
+  }
+  .input-cyber {
+    width: 100%; padding: 11px 14px;
+    background: rgba(0,0,0,0.6); border: 1px solid rgba(74,222,128,0.3);
+    border-radius: 8px; color: #fff; font-family: 'Rajdhani', sans-serif;
+    font-size: 14px; letter-spacing: 0.4px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none; box-sizing: border-box;
+  }
+  .input-cyber::placeholder { color: rgba(156,163,175,0.55); }
+  .input-cyber:focus {
+    border-color: rgba(74,222,128,0.8);
+    box-shadow: 0 0 0 3px rgba(74,222,128,0.12), 0 0 14px rgba(74,222,128,0.15);
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: #fff; border: 1px solid rgba(74,222,128,0.5);
+    font-family: 'Orbitron', monospace; font-size: 11px;
+    letter-spacing: 1px; padding: 10px 20px; border-radius: 8px;
+    cursor: pointer; font-weight: 600;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #15803d, #166534);
+    box-shadow: 0 0 18px rgba(74,222,128,0.35);
+  }
+  .btn-ghost {
+    background: rgba(0,0,0,0.5); color: #9ca3af;
+    border: 1px solid rgba(74,222,128,0.2);
+    font-family: 'Rajdhani', sans-serif; font-size: 14px;
+    padding: 10px 20px; border-radius: 8px;
+    cursor: pointer; font-weight: 600;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .btn-ghost:hover {
+    background: rgba(74,222,128,0.08); color: #4ade80;
+    border-color: rgba(74,222,128,0.4);
+  }
+  .btn-danger {
+    background: rgba(220,38,38,0.15); color: #f87171;
+    border: 1px solid rgba(220,38,38,0.3);
+    font-family: 'Rajdhani', sans-serif; font-size: 13px;
+    padding: 8px 14px; border-radius: 8px;
+    cursor: pointer; font-weight: 600;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  .btn-danger:hover { background: rgba(220,38,38,0.3); box-shadow: 0 0 12px rgba(220,38,38,0.25); }
+  .btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-blue {
+    background: rgba(37,99,235,0.15); color: #60a5fa;
+    border: 1px solid rgba(37,99,235,0.3);
+    font-family: 'Rajdhani', sans-serif; font-size: 13px;
+    padding: 8px 14px; border-radius: 8px;
+    cursor: pointer; font-weight: 600;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  .btn-blue:hover { background: rgba(37,99,235,0.3); box-shadow: 0 0 12px rgba(37,99,235,0.25); }
+  .btn-green-ghost {
+    background: rgba(74,222,128,0.08); color: #4ade80;
+    border: 1px solid rgba(74,222,128,0.25);
+    font-family: 'Rajdhani', sans-serif; font-size: 13px;
+    padding: 8px 16px; border-radius: 8px;
+    cursor: pointer; font-weight: 600;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  .btn-green-ghost:hover { background: rgba(74,222,128,0.15); box-shadow: 0 0 10px rgba(74,222,128,0.18); }
+  .scan-line {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none; z-index: 999; opacity: 0.022;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(74,222,128,0.4) 2px, rgba(74,222,128,0.4) 4px
+    );
+  }
+  .hex-bg {
+    position: fixed; inset: 0; pointer-events: none;
+    background-image: radial-gradient(circle, rgba(74,222,128,0.06) 1px, transparent 1px);
+    background-size: 40px 40px; z-index: 0;
+  }
+  .tag {
+    display: inline-block; background: rgba(74,222,128,0.1);
+    border: 1px solid rgba(74,222,128,0.25); color: #4ade80; font-size: 10px;
+    padding: 2px 7px; border-radius: 4px;
+    font-family: 'Orbitron', monospace; letter-spacing: 0.5px;
+  }
+  .team-card {
+    background: rgba(255,255,255,0.03); backdrop-filter: blur(16px);
+    border: 1px solid rgba(74,222,128,0.15); border-radius: 16px; overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .team-card:hover {
+    border-color: rgba(74,222,128,0.4);
+    box-shadow: 0 0 28px rgba(74,222,128,0.18), 0 16px 36px rgba(0,0,0,0.4);
+  }
+  .team-card .card-actions { opacity: 0; transition: opacity 0.2s; }
+  .team-card:hover .card-actions { opacity: 1; }
+  .player-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 8px; border-radius: 7px; transition: background 0.15s;
+  }
+  .player-row:hover { background: rgba(74,222,128,0.06); }
+  .player-row .del-btn { opacity: 0; transition: opacity 0.15s; }
+  .player-row:hover .del-btn { opacity: 1; }
+  .checkbox-cyber {
+    width: 18px; height: 18px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  }
+  .checkbox-cyber.checked {
+    background: #16a34a; box-shadow: 0 0 8px rgba(74,222,128,0.45); border: 1px solid #4ade80;
+  }
+  .checkbox-cyber.unchecked {
+    background: rgba(0,0,0,0.4); border: 1px solid rgba(74,222,128,0.3);
+  }
+  .checkbox-cyber.unchecked:hover { border-color: #4ade80; }
+  .player-form-row {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    background: rgba(0,0,0,0.35); border: 1px solid rgba(74,222,128,0.12);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+  }
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.82);
+    backdrop-filter: blur(10px); display: flex; align-items: center;
+    justify-content: center; z-index: 200; padding: 16px;
+  }
+  .modal-box {
+    width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto;
+    border-radius: 18px; background: rgba(5,10,5,0.96);
+    border: 1px solid rgba(74,222,128,0.35);
+    box-shadow: 0 0 50px rgba(74,222,128,0.1), 0 40px 80px rgba(0,0,0,0.7);
+    display: flex; flex-direction: column;
+  }
+  .modal-box::-webkit-scrollbar { width: 6px; }
+  .modal-box::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+  .modal-box::-webkit-scrollbar-thumb { background: rgba(74,222,128,0.3); border-radius: 3px; }
+  .close-btn {
+    background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.2);
+    border-radius: 8px; padding: 6px 8px; cursor: pointer; color: #9ca3af;
+    display: flex; align-items: center; transition: color 0.15s, background 0.15s;
+  }
+  .close-btn:hover { color: #fff; background: rgba(74,222,128,0.15); }
+`;
 
-const TeamForm = React.memo(({
-  form,
-  setForm,
-  playersForm,
-  setPlayersForm,
-  handleTeamInputChange,
-  handlePlayerChange,
-  addPlayerInput,
-  removePlayerInput,
-  handleSubmit,
-  editingTeamId,
-  resetForm,
-  handleLogoUpload,
-  handlePlayerPhotoUpload
+/* ─────────────────────────────────────────────
+   PlayerRow
+───────────────────────────────────────────── */
+const PlayerRow = memo(({
+  player, isSelected, onToggle, onDelete, isDeleting, teamId,
+}: {
+  player: Player;
+  isSelected: boolean;
+  onToggle: (playerId: string) => void;
+  onDelete: (teamId: string, playerId: string) => void;
+  isDeleting: boolean;
+  teamId: string;
+}) => {
+  const handleToggle = useCallback(() => onToggle(player._id!), [player._id, onToggle]);
+  const handleDelete = useCallback(() => onDelete(teamId, player._id!), [teamId, player._id, onDelete]);
+
+  return (
+    <li className="player-row">
+      <div className={`checkbox-cyber ${isSelected ? 'checked' : 'unchecked'}`} onClick={handleToggle}>
+        {isSelected && (
+          <svg width="10" height="10" fill="none" stroke="white" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </div>
+      {player.photo && (
+        <img src={player.photo} alt={player.playerName}
+          style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover',
+            border: '1px solid rgba(74,222,128,0.3)', flexShrink: 0 }}
+          loading="lazy" onError={(e) => e.currentTarget.src = './def_char.png'} />
+      )}
+      <span style={{ flex: 1, fontSize: 12, color: '#d1d5db', minWidth: 0 }}>
+        <strong style={{ color: '#fff' }}>{player.playerName}</strong>
+        {player.playerId && (
+          <span style={{ color: '#6b7280', fontSize: 10, marginLeft: 3 }}>({player.playerId})</span>
+        )}
+      </span>
+      {player._id && (
+        <button className="del-btn" onClick={handleDelete} disabled={isDeleting}
+          style={{ padding: '3px 5px', background: 'rgba(220,38,38,0.12)',
+            border: '1px solid rgba(220,38,38,0.22)', borderRadius: 5,
+            cursor: 'pointer', color: '#f87171', transition: 'background 0.15s' }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(220,38,38,0.28)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(220,38,38,0.12)')}>
+          <FaTrash size={9} />
+        </button>
+      )}
+    </li>
+  );
+});
+
+/* ─────────────────────────────────────────────
+   TeamCard
+───────────────────────────────────────────── */
+const TeamCard = memo(({
+  team, onEdit, onDelete, onDeletePlayer, onDeleteSelectedPlayers,
+  deletingTeamIds, deletingPlayerIds,
+}: {
+  team: Team;
+  onEdit: (team: Team) => void;
+  onDelete: (id: string) => void;
+  onDeletePlayer: (teamId: string, playerId: string) => void;
+  onDeleteSelectedPlayers: (teamId: string, playerIds: string[]) => Promise<void>;
+  deletingTeamIds: Set<string>;
+  deletingPlayerIds: Set<string>;
+}) => {
+  const { t } = useTranslation();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // When team.players changes (e.g. after deletion), prune stale selected ids
+  useEffect(() => {
+    setSelected((prev) => {
+      const validIds = new Set(team.players.map((p) => p._id!).filter(Boolean));
+const pruned = new Set(Array.from(prev).filter((id) => validIds.has(id)));      return pruned.size === prev.size ? prev : pruned;
+    });
+  }, [team.players]);
+
+  const togglePlayer = useCallback((playerId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(playerId)) next.delete(playerId); else next.add(playerId);
+      return next;
+    });
+  }, []);
+
+  const handleDeleteSelected = useCallback(async () => {
+    if (selected.size === 0) return;
+    if (!window.confirm('Delete selected players?')) return;
+    try {
+      await onDeleteSelectedPlayers(team._id, Array.from(selected));
+      setSelected(new Set());
+    } catch {
+      // error already handled + alerted in root
+    }
+  }, [selected, team._id, onDeleteSelectedPlayers]);
+
+  const handleEdit = useCallback(() => onEdit(team), [onEdit, team]);
+  const handleDelete = useCallback(() => onDelete(team._id), [onDelete, team._id]);
+
+  return (
+    <div className="team-card" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ height: 3, flexShrink: 0,
+        background: 'linear-gradient(90deg, #4ade80, #166534, transparent)' }} />
+      <div style={{ padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+
+        {/* Logo + name */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 12 }}>
+          {team.logo ? (
+            <img src={team.logo} alt={team.teamFullName}
+              style={{ width: 56, height: 56, objectFit: 'contain', borderRadius: 10,
+                marginBottom: 8, border: '1px solid rgba(74,222,128,0.3)' }}
+              loading="lazy" onError={(e) => e.currentTarget.src = './logo.png'} />
+          ) : (
+            <div style={{ width: 56, height: 56, borderRadius: 10, marginBottom: 8,
+              background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <FaUsers size={22} style={{ color: '#4ade80', opacity: 0.5 }} />
+            </div>
+          )}
+          <span className="tag" style={{ marginBottom: 5 }}>TEAM</span>
+          <h4 className="orbitron font-bold text-white text-center"
+            style={{ fontSize: 13, letterSpacing: 0.5, marginBottom: 2 }}>
+            {team.teamFullName}
+          </h4>
+          <span style={{ color: '#4ade80', fontSize: 11, fontFamily: 'Orbitron, monospace', opacity: 0.8 }}>
+            [{team.teamTag}]
+          </span>
+        </div>
+
+        {/* Players */}
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10, color: '#6b7280', letterSpacing: 1, marginBottom: 6,
+            fontFamily: 'Orbitron, monospace',
+            borderBottom: '1px solid rgba(74,222,128,0.1)', paddingBottom: 5 }}>
+            PLAYERS ({team.players.length})
+          </div>
+          {team.players.length === 0 ? (
+            <p style={{ color: '#4b5563', fontSize: 12, textAlign: 'center', padding: '6px 0' }}>
+              {t('teams.teamCard.noPlayers')}
+            </p>
+          ) : (
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0,
+              display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {team.players.map((player) => (
+                <PlayerRow
+                  key={player._id || player.playerName}
+                  player={player}
+                  isSelected={selected.has(player._id!)}
+                  onToggle={togglePlayer}
+                  onDelete={onDeletePlayer}
+                  isDeleting={deletingPlayerIds.has(player._id!)}
+                  teamId={team._id}
+                />
+              ))}
+            </ul>
+          )}
+          {selected.size > 0 && (
+            <button className="btn-danger"
+              style={{ width: '100%', marginTop: 8, fontSize: 12 }}
+              onClick={handleDeleteSelected}>
+              {t('teams.teamCard.deleteSelected')} ({selected.size})
+            </button>
+          )}
+        </div>
+
+        {/* Edit / Delete */}
+        <div className="card-actions"
+          style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 10,
+            borderTop: '1px solid rgba(74,222,128,0.1)' }}>
+          <button className="btn-blue"
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+            onClick={handleEdit}>
+            <FaEdit size={12} /> {t('teams.teamCard.edit')}
+          </button>
+          <button className="btn-danger"
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+            onClick={handleDelete} disabled={deletingTeamIds.has(team._id)}>
+            <FaTrash size={11} /> {t('teams.teamCard.delete')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+/* ─────────────────────────────────────────────
+   SearchInput
+───────────────────────────────────────────── */
+const SearchInput = memo(({ onSearchChange }: { onSearchChange: (q: string) => void }) => {
+  const { t } = useTranslation();
+  const [localQuery, setLocalQuery] = useState('');
+  const [, startTransition] = useTransition();
+
+  useEffect(() => {
+    const id = setTimeout(() => {
+      startTransition(() => onSearchChange(localQuery));
+    }, localQuery === '' ? 0 : 300);
+    return () => clearTimeout(id);
+  }, [localQuery, onSearchChange]);
+
+  return (
+    <div style={{ position: 'relative', maxWidth: 420 }}>
+      <svg style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
+        color: '#4ade80', opacity: 0.5, pointerEvents: 'none' }}
+        width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <input type="text" placeholder={t('teams.search.placeholder')}
+        value={localQuery} onChange={(e) => setLocalQuery(e.target.value)}
+        className="input-cyber" style={{ paddingLeft: 38 }} />
+    </div>
+  );
+});
+
+/* ─────────────────────────────────────────────
+   TeamForm (inline create)
+───────────────────────────────────────────── */
+const TeamForm = memo(({
+  form, playersForm, handleTeamInputChange, handlePlayerChange,
+  addPlayerInput, removePlayerInput, handleSubmit, editingTeamId,
+  resetForm, handleLogoUpload, handlePlayerPhotoUpload,
 }: {
   form: { teamFullName: string; teamTag: string; logo: string };
   setForm: React.Dispatch<React.SetStateAction<{ teamFullName: string; teamTag: string; logo: string }>>;
@@ -54,117 +432,79 @@ const TeamForm = React.memo(({
 }) => {
   const { t } = useTranslation();
   return (
-    <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 mb-8 shadow-xl">
-      <h3 className="text-xl font-bold text-white mb-4">
-        {editingTeamId ? t('teams.form.editTitle') : t('teams.form.createTitle')}
-      </h3>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="text"
-          name="teamFullName"
-          placeholder="Team Full Name"
-          value={form.teamFullName}
-          onChange={handleTeamInputChange}
-          required
-          className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-          autoFocus
-        />
-        <input
-          type="text"
-          name="teamTag"
-          placeholder="Team Tag"
-          value={form.teamTag}
-          onChange={handleTeamInputChange}
-          required
-          className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-        />
-        <label htmlFor="modal-team-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
-          <FaUpload size={16} />
+    <div className="glass-dark neon-border rounded-2xl p-6 mb-8" style={{ maxWidth: 680 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+        <span className="tag">NEW</span>
+        <h3 className="orbitron text-white font-bold" style={{ fontSize: 16 }}>
+          {editingTeamId ? t('teams.form.editTitle') : t('teams.form.createTitle')}
+        </h3>
+      </div>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <input type="text" name="teamFullName"
+          placeholder={t('teams.form.teamName') || 'Team Full Name'}
+          value={form.teamFullName} onChange={handleTeamInputChange} required autoFocus className="input-cyber" />
+        <input type="text" name="teamTag"
+          placeholder={t('teams.form.teamTag') || 'Team Tag'}
+          value={form.teamTag} onChange={handleTeamInputChange} required className="input-cyber" />
+        <label htmlFor="inline-team-logo-upload" className="input-cyber"
+          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+          <FaUpload size={14} style={{ color: '#4ade80' }} />
           {t('teams.form.uploadLogo')}
         </label>
-        <input
-          id="modal-team-logo-upload"
-          type="file"
-          accept="image/*"
-          onChange={handleLogoUpload}
-          className="hidden"
-        />
+        <input id="inline-team-logo-upload" type="file" accept="image/*"
+          onChange={handleLogoUpload} style={{ display: 'none' }} />
         {form.logo && (
-          <img
-            src={form.logo}
-            alt="Logo Preview"
-            className="w-24 h-24 object-contain my-2 rounded-lg border border-slate-600"
-            loading="lazy"
-            onError={(e) => e.currentTarget.src = './logo.png'}
-          />
+          <img src={form.logo} alt="Logo Preview"
+            style={{ width: 72, height: 72, objectFit: 'contain', borderRadius: 10,
+              border: '1px solid rgba(74,222,128,0.4)' }}
+            loading="lazy" onError={(e) => e.currentTarget.src = './logo.png'} />
         )}
-
-        <h4 className="font-semibold text-white mt-4">{t('teams.form.players')}</h4>
+        <div style={{ fontSize: 10, color: '#4ade80', letterSpacing: 1,
+          fontFamily: 'Orbitron, monospace', marginTop: 4, marginBottom: 2 }}>
+          {t('teams.form.players').toUpperCase()}
+        </div>
         {playersForm.map((player, index) => (
-          <div key={player._id || index} className="flex gap-2 mb-2 items-center">
-            <input
-              type="text"
-              name="playerName"
-              placeholder={t('teams.form.playerName')}
-              value={player.playerName}
+          <div key={player._id || index} className="player-form-row">
+            <input type="text" name="playerName"
+              placeholder={t('teams.form.playerName')} value={player.playerName}
+              onChange={(e) => handlePlayerChange(index, e)} required
+              className="input-cyber" style={{ flex: '1 1 160px', width: 'auto' }} />
+            <input type="text" name="playerId"
+              placeholder={t('teams.form.playerId')} value={player.playerId}
               onChange={(e) => handlePlayerChange(index, e)}
-              required
-              className="px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all flex-grow"
-            />
-            <input
-              type="text"
-              name="playerId"
-              placeholder={t('teams.form.playerId')}
-              value={player.playerId}
-              onChange={(e) => handlePlayerChange(index, e)}
-              className="px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all w-36"
-            />
-            <label htmlFor={`player-photo-${index}`} className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-40">
-              <FaUpload size={10} />
+              className="input-cyber" style={{ flex: '0 0 110px', width: 110 }} />
+            <label htmlFor={`inline-player-photo-${index}`} className="input-cyber"
+              style={{ flex: '0 0 130px', width: 130, display: 'flex', alignItems: 'center',
+                gap: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <FaUpload size={11} style={{ color: '#4ade80' }} />
               {t('teams.form.uploadPhoto')}
             </label>
-            <input
-              id={`player-photo-${index}`}
-              type="file"
-              accept="image/*"
-              onChange={(e) => handlePlayerPhotoUpload(index, e)}
-              className="hidden"
-            />
+            <input id={`inline-player-photo-${index}`} type="file" accept="image/*"
+              onChange={(e) => handlePlayerPhotoUpload(index, e)} style={{ display: 'none' }} />
             {player.photo && (
-              <img
-                src={player.photo}
-                alt="Player Photo Preview"
-                className="w-12 h-12 rounded-full object-cover border-2 border-slate-600"
-                loading="lazy"
-                onError={(e) => e.currentTarget.src = './def_char.png'}
-              />
+              <img src={player.photo} alt="Preview"
+                style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover',
+                  border: '1px solid rgba(74,222,128,0.4)', flexShrink: 0 }}
+                loading="lazy" onError={(e) => e.currentTarget.src = './def_char.png'} />
             )}
             {playersForm.length > 1 && (
-              <button
-                type="button"
-                onClick={() => removePlayerInput(index)}
-                className="p-2.5 bg-red-600 rounded-lg hover:bg-red-700 transition-colors text-white"
-                title="Remove player"
-              >
-                <FaTrash />
+              <button type="button" onClick={() => removePlayerInput(index)}
+                className="btn-danger" style={{ padding: '6px 10px', flexShrink: 0 }}>
+                <FaTrash size={11} />
               </button>
             )}
           </div>
         ))}
-        <button
-          type="button"
-          onClick={addPlayerInput}
-          className="bg-green-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-green-700 transition-colors mb-4"
-        >
-          {t('teams.form.addPlayer')}
+        <button type="button" onClick={addPlayerInput} className="btn-green-ghost"
+          style={{ alignSelf: 'flex-start' }}>
+          + {t('teams.form.addPlayer')}
         </button>
-
-        <div className="flex gap-3 pt-2">
-          <button type="submit" className="bg-purple-600 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-purple-700 transition-colors">
+        <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+          <button type="submit" className="btn-primary">
             {editingTeamId ? t('teams.form.updateTeam') : t('teams.form.createTeam')}
           </button>
           {editingTeamId && (
-            <button type="button" onClick={resetForm} className="bg-slate-700 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-slate-600 transition-colors">
+            <button type="button" onClick={resetForm} className="btn-ghost">
               {t('teams.form.cancel')}
             </button>
           )}
@@ -174,195 +514,11 @@ const TeamForm = React.memo(({
   );
 });
 
-const SearchInput = React.memo(({ onSearchChange }: { onSearchChange: (query: string) => void }) => {
-  const { t } = useTranslation();
-  const [localQuery, setLocalQuery] = useState('');
-
-  const [, startTransition] = useTransition();
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      startTransition(() => onSearchChange(localQuery));
-    }, localQuery === '' ? 0 : 300);
-    return () => clearTimeout(timeout);
-  }, [localQuery, onSearchChange]);
-
-  return (
-    <input
-      type="text"
-      placeholder={t('teams.search.placeholder')}
-      value={localQuery}
-      onChange={(e) => setLocalQuery(e.target.value)}
-      className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all mb-6"
-    />
-  );
-});
-
-const PlayerRow = React.memo(({
-  player,
-  isSelected,
-  togglePlayer,
-  deletePlayer,
-  isDeleting,
-  teamId
-}: {
-  player: Player;
-  isSelected: boolean;
-  togglePlayer: (playerId: string) => void;
-  deletePlayer: (teamId: string, playerId: string) => void;
-  isDeleting: boolean;
-  teamId: string;
-}) => {
-  return (
-    <li className="flex justify-between items-center py-1.5 px-2 rounded-lg hover:bg-slate-700/30 transition-colors group">
-      <div className="flex items-center gap-3 flex-grow">
-        <div
-          onClick={() => togglePlayer(player._id!)}
-          className={`w-5 h-5 rounded-md flex items-center justify-center cursor-pointer transition-all duration-200 flex-shrink-0 ${isSelected ? 'bg-purple-600 shadow-[0_0_8px_rgba(147,51,234,0.5)]' : 'bg-slate-700 border border-slate-600 hover:border-purple-500'}`}
-        >
-          {isSelected && (
-            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
-            </svg>
-          )}
-        </div>
-        {player.photo && (
-          <img
-            src={player.photo}
-            alt={player.playerName}
-            className="w-7 h-7 rounded-full object-cover border-2 border-slate-600"
-            loading="lazy"
-            onError={(e) => e.currentTarget.src = './def_char.png'}
-          />
-        )}
-        <span className="text-gray-300">
-          <strong className="text-white">{player.playerName}</strong>
-          {player.playerId && <span className="text-gray-500 text-xs ml-1">({player.playerId})</span>}
-        </span>
-      </div>
-      {player._id && (
-        <button
-          onClick={() => deletePlayer(teamId, player._id!)}
-          className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-900/20 transition-all opacity-0 group-hover:opacity-100"
-          title="Delete Player"
-          disabled={isDeleting}
-        >
-          <FaTrash size={12} />
-        </button>
-      )}
-    </li>
-  );
-});
-
-const TeamCard = React.memo(({
-  team,
-  selectedForTeam,
-  setSelectedPlayersPerTeam,
-  startEditTeam,
-  deleteTeam,
-  deletePlayer,
-  deleteSelectedPlayers,
-  deletingPlayerIds,
-  deletingTeamIds,
-  isVisible
-}: {
-  team: Team;
-  selectedForTeam: Set<string>;
-  setSelectedPlayersPerTeam: React.Dispatch<React.SetStateAction<Record<string, Set<string>>>>;
-  startEditTeam: (team: Team) => void;
-  deleteTeam: (id: string) => void;
-  deletePlayer: (teamId: string, playerId: string) => void;
-  deleteSelectedPlayers: (teamId: string) => void;
-  deletingPlayerIds: Set<string>;
-  deletingTeamIds: Set<string>;
-  isVisible: boolean;
-}) => {
-  const { t } = useTranslation();
-  const togglePlayer = useCallback((playerId: string) => {
-    setSelectedPlayersPerTeam((prev) => {
-      const newSet = new Set(prev[team._id] || []);
-      if (newSet.has(playerId)) newSet.delete(playerId);
-      else newSet.add(playerId);
-      return { ...prev, [team._id]: newSet };
-    });
-  }, [team._id, setSelectedPlayersPerTeam]);
-
-  return (
-    <div
-      className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 shadow-lg hover:shadow-xl transition-all flex flex-col group hover:border-slate-600"
-      style={{ display: isVisible ? 'flex' : 'none' }}
-    >
-      {team.logo && (
-        <img
-          src={team.logo}
-          alt={`${team.teamFullName} logo`}
-          className="w-20 h-20 object-contain mb-3 mx-auto rounded-lg"
-          loading="lazy"
-          onError={(e) => e.currentTarget.src = './logo.png'}
-        />
-      )}
-      <h4 className="font-bold text-white text-center text-lg mb-1">
-        {team.teamFullName}
-      </h4>
-      <p className="text-purple-400 text-center text-sm mb-4">({team.teamTag})</p>
-
-      <div className="w-full mt-2 flex-grow">
-        <h5 className="font-semibold text-gray-300 text-sm mb-2">{t('teams.teamCard.players')}</h5>
-        {team.players.length === 0 ? (
-          <p className="text-gray-500 text-sm">{t('teams.teamCard.noPlayers')}</p>
-        ) : (
-          <ul className="text-sm space-y-2">
-            {team.players.map((player) => (
-              <PlayerRow
-                key={player._id || player.playerName}
-                player={player}
-                isSelected={selectedForTeam.has(player._id!)}
-                togglePlayer={togglePlayer}
-                deletePlayer={deletePlayer}
-                isDeleting={deletingPlayerIds.has(player._id!)}
-                teamId={team._id}
-              />
-            ))}
-          </ul>
-        )}
-        {selectedForTeam.size > 0 && (
-          <button
-            onClick={() => deleteSelectedPlayers(team._id)}
-            className="bg-red-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-red-700 transition-colors mt-3 w-full text-sm"
-          >
-            {t('teams.teamCard.deleteSelected')} ({selectedForTeam.size})
-          </button>
-        )}
-      </div>
-
-      <div className="mt-4 pt-4 border-t border-slate-700/50 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-        <button
-          onClick={() => startEditTeam(team)}
-          className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 rounded-xl hover:from-blue-500 hover:to-blue-600 transition-all text-white font-medium text-sm shadow-lg shadow-blue-900/30 hover:shadow-blue-900/50 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
-          aria-label={`Edit team ${team.teamFullName}`}
-        >
-          <FaEdit size={14} /> {t('teams.teamCard.edit')}
-        </button>
-        <button
-          onClick={() => deleteTeam(team._id)}
-          className="flex-1 bg-gradient-to-r from-red-600 to-red-700 px-4 py-2.5 rounded-xl hover:from-red-500 hover:to-red-600 transition-all text-white font-medium text-sm shadow-lg shadow-red-900/30 hover:shadow-red-900/50 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-          aria-label={`Delete team ${team.teamFullName}`}
-          disabled={deletingTeamIds.has(team._id)}
-        >
-          <FaTrash size={12} /> {t('teams.teamCard.delete')}
-        </button>
-      </div>
-    </div>
-  );
-});
-
-const FormContainer = React.memo(({
-  showForm,
-  setShowForm,
-  editingTeamId,
-  setEditingTeamId,
-  teams,
-  setTeams
+/* ─────────────────────────────────────────────
+   FormContainer (create inline / edit modal)
+───────────────────────────────────────────── */
+const FormContainer = memo(({
+  showForm, setShowForm, editingTeamId, setEditingTeamId, teams, setTeams,
 }: {
   showForm: boolean;
   setShowForm: React.Dispatch<React.SetStateAction<boolean>>;
@@ -373,9 +529,7 @@ const FormContainer = React.memo(({
 }) => {
   const { t } = useTranslation();
   const [form, setForm] = useState({ teamFullName: '', teamTag: '', logo: '' });
-  const [playersForm, setPlayersForm] = useState<Player[]>([
-    { playerName: '', playerId: '', photo: '' },
-  ]);
+  const [playersForm, setPlayersForm] = useState<Player[]>([{ playerName: '', playerId: '', photo: '' }]);
 
   const resetForm = useCallback(() => {
     setEditingTeamId(null);
@@ -391,11 +545,7 @@ const FormContainer = React.memo(({
 
   const handlePlayerChange = useCallback((index: number, e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setPlayersForm((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], [name]: value };
-      return copy;
-    });
+    setPlayersForm((prev) => { const c = [...prev]; c[index] = { ...c[index], [name]: value }; return c; });
   }, []);
 
   const addPlayerInput = useCallback(() => {
@@ -407,66 +557,40 @@ const FormContainer = React.memo(({
   }, []);
 
   const handleLogoUpload = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const url = await uploadToCloudinary(file, "teams/logos", "team_logo");
-      setForm((prev) => ({ ...prev, logo: url }));
-    } catch (err) {
-      alert("Upload failed");
-    }
+    const file = e.target.files?.[0]; if (!file) return;
+    try { const url = await uploadToCloudinary(file, 'teams/logos', 'team_logo'); setForm((p) => ({ ...p, logo: url })); }
+    catch { alert('Upload failed'); }
   }, []);
 
   const handlePlayerPhotoUpload = useCallback(async (index: number, e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const file = e.target.files?.[0]; if (!file) return;
     try {
-      const url = await uploadToCloudinary(file, "players/photos", "player_photo");
-      setPlayersForm((prev) => {
-        const copy = [...prev];
-        copy[index] = { ...copy[index], photo: url };
-        return copy;
-      });
-    } catch (err) {
-      alert("Upload failed");
-    }
+      const url = await uploadToCloudinary(file, 'players/photos', 'player_photo');
+      setPlayersForm((prev) => { const c = [...prev]; c[index] = { ...c[index], photo: url }; return c; });
+    } catch { alert('Upload failed'); }
   }, []);
 
   const handleSubmit = useCallback(async (e: FormEvent) => {
     e.preventDefault();
-
-    if (playersForm.some((p) => p.playerName.trim() === '')) {
-      alert('Please fill in all player names');
-      return;
-    }
-
+    if (playersForm.some((p) => p.playerName.trim() === '')) { alert('Please fill in all player names'); return; }
     try {
       const payload = { ...form, players: playersForm };
       if (editingTeamId) {
         const res = await api.put(`/teams/${editingTeamId}`, payload);
-        setTeams((prev) =>
-          prev.map((team) => (team._id === editingTeamId ? res.data : team))
-        );
+        setTeams((prev) => prev.map((t) => (t._id === editingTeamId ? res.data : t)));
       } else {
         const res = await api.post('/teams', payload);
         setTeams((prev) => [...prev, res.data]);
       }
       resetForm();
-    } catch (err) {
-      alert('Failed to save team');
-      console.error(err);
-    }
+    } catch (err) { alert('Failed to save team'); console.error(err); }
   }, [form, playersForm, editingTeamId, setTeams, resetForm]);
 
   useEffect(() => {
     if (editingTeamId) {
-      const team = teams.find(t => t._id === editingTeamId);
+      const team = teams.find((t) => t._id === editingTeamId);
       if (team) {
-        setForm({
-          teamFullName: team.teamFullName,
-          teamTag: team.teamTag,
-          logo: team.logo || '',
-        });
+        setForm({ teamFullName: team.teamFullName, teamTag: team.teamTag, logo: team.logo || '' });
         setPlayersForm(team.players.length ? team.players : [{ playerName: '', playerId: '', photo: '' }]);
         setShowForm(true);
       }
@@ -475,148 +599,98 @@ const FormContainer = React.memo(({
 
   useEffect(() => {
     if (editingTeamId) {
-      const team = teams.find(t => t._id === editingTeamId);
-      if (team) {
-        setPlayersForm(team.players.length ? team.players : [{ playerName: '', playerId: '', photo: '' }]);
-      }
+      const team = teams.find((t) => t._id === editingTeamId);
+      if (team) setPlayersForm(team.players.length ? team.players : [{ playerName: '', playerId: '', photo: '' }]);
     }
   }, [teams, editingTeamId]);
 
-  // If editing, show as modal; otherwise show as inline form
   if (editingTeamId) {
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-2 sm:p-4">
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl relative flex flex-col max-h-[95vh] sm:max-h-[90vh]">
-          {/* Modal Header */}
-          <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-700">
-            <h3 className="text-xl sm:text-2xl font-bold text-white">{t('teams.form.editTitle')}</h3>
-            <button
-              onClick={resetForm}
-              className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-slate-700 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+      <div className="modal-overlay">
+        <div className="modal-box">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '20px 24px 16px', borderBottom: '1px solid rgba(74,222,128,0.15)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="tag">EDIT</span>
+              <h3 className="orbitron text-white font-bold" style={{ fontSize: 16 }}>
+                {t('teams.form.editTitle')}
+              </h3>
+            </div>
+            <button className="close-btn" onClick={resetForm}>
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-
-          {/* Modal Body - Scrollable */}
-          <div className="p-4 sm:p-6 overflow-y-auto flex-1">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <input
-                type="text"
-                name="teamFullName"
-                placeholder={t('teams.form.teamName')}
-                value={form.teamFullName}
-                onChange={handleTeamInputChange}
-                required
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                autoFocus
-              />
-              <input
-                type="text"
-                name="teamTag"
-                placeholder={t('teams.form.teamTag')}
-                value={form.teamTag}
-                onChange={handleTeamInputChange}
-                required
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-              />
-              <label htmlFor="team-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all">
-                <FaUpload size={16} />
+          <div style={{ padding: '20px 24px' }}>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <input type="text" name="teamFullName" autoFocus
+                placeholder={t('teams.form.teamName') || 'Team Full Name'}
+                value={form.teamFullName} onChange={handleTeamInputChange} required className="input-cyber" />
+              <input type="text" name="teamTag"
+                placeholder={t('teams.form.teamTag') || 'Team Tag'}
+                value={form.teamTag} onChange={handleTeamInputChange} required className="input-cyber" />
+              <label htmlFor="modal-team-logo-upload" className="input-cyber"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <FaUpload size={14} style={{ color: '#4ade80' }} />
                 {t('teams.form.uploadLogo')}
               </label>
-              <input
-                id="team-logo-upload"
-                type="file"
-                accept="image/*"
-                onChange={handleLogoUpload}
-                className="hidden"
-              />
+              <input id="modal-team-logo-upload" type="file" accept="image/*"
+                onChange={handleLogoUpload} style={{ display: 'none' }} />
               {form.logo && (
-                <img
-                  src={form.logo}
-                  alt="Logo Preview"
-                  className="w-20 h-20 object-contain rounded-lg border border-slate-600 mx-auto"
-                  loading="lazy"
-                />
+                <img src={form.logo} alt="Logo"
+                  style={{ width: 68, height: 68, objectFit: 'contain', borderRadius: 10,
+                    border: '1px solid rgba(74,222,128,0.4)', alignSelf: 'center' }}
+                  loading="lazy" onError={(e) => e.currentTarget.src = './logo.png'} />
               )}
-
-              <h4 className="font-semibold text-purple-400 mt-4 text-sm uppercase tracking-wider">{t('teams.form.players')}</h4>
+              <div style={{ fontSize: 10, color: '#4ade80', letterSpacing: 1,
+                fontFamily: 'Orbitron, monospace', marginTop: 4 }}>
+                {t('teams.form.players').toUpperCase()}
+              </div>
               {playersForm.map((player, index) => (
-                <div key={player._id || index} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-slate-900/30 p-3 rounded-lg border border-slate-700/30 mb-2">
-                  <input
-                    type="text"
-                    name="playerName"
-                    placeholder={t('teams.form.playerName')}
-                    value={player.playerName}
+                <div key={player._id || index} className="player-form-row">
+                  <input type="text" name="playerName"
+                    placeholder={t('teams.form.playerName')} value={player.playerName}
+                    onChange={(e) => handlePlayerChange(index, e)} required
+                    className="input-cyber" style={{ flex: '1 1 140px', width: 'auto' }} />
+                  <input type="text" name="playerId"
+                    placeholder={t('teams.form.playerId')} value={player.playerId}
                     onChange={(e) => handlePlayerChange(index, e)}
-                    required
-                    className="px-3 py-2 bg-slate-800 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all w-full sm:flex-grow text-sm"
-                  />
-                  <input
-                    type="text"
-                    name="playerId"
-                    placeholder={t('teams.form.playerId')}
-                    value={player.playerId}
-                    onChange={(e) => handlePlayerChange(index, e)}
-                    className="px-3 py-2 bg-slate-800 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all w-full sm:w-24 text-sm"
-                  />
-                  <label htmlFor={`modal-player-photo-${index}`} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-700 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full sm:w-28 text-sm">
-                    <FaUpload size={12} />
+                    className="input-cyber" style={{ flex: '0 0 100px', width: 100 }} />
+                  <label htmlFor={`modal-player-photo-${index}`} className="input-cyber"
+                    style={{ flex: '0 0 120px', width: 120, display: 'flex', alignItems: 'center',
+                      gap: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    <FaUpload size={11} style={{ color: '#4ade80' }} />
                     {t('teams.form.uploadPhoto')}
                   </label>
-                  <input
-                    id={`modal-player-photo-${index}`}
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handlePlayerPhotoUpload(index, e)}
-                    className="hidden"
-                  />
-                  <div className="flex items-center gap-2 sm:ml-auto">
+                  <input id={`modal-player-photo-${index}`} type="file" accept="image/*"
+                    onChange={(e) => handlePlayerPhotoUpload(index, e)} style={{ display: 'none' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
                     {player.photo && (
-                      <img
-                        src={player.photo}
-                        alt="Player Photo Preview"
-                        className="w-10 h-10 rounded-full object-cover border-2 border-slate-600"
-                        loading="lazy"
-                        onError={(e) => e.currentTarget.src = './def_char.png'}
-                      />
+                      <img src={player.photo} alt="Preview"
+                        style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover',
+                          border: '1px solid rgba(74,222,128,0.4)' }}
+                        loading="lazy" onError={(e) => e.currentTarget.src = './def_char.png'} />
                     )}
                     {playersForm.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removePlayerInput(index)}
-                        className="p-2 bg-red-600/20 rounded-lg hover:bg-red-600/40 transition-colors text-red-400"
-                        title="Remove player"
-                      >
-                        <FaTrash size={12} />
+                      <button type="button" onClick={() => removePlayerInput(index)}
+                        className="btn-danger" style={{ padding: '6px 9px' }}>
+                        <FaTrash size={11} />
                       </button>
                     )}
                   </div>
                 </div>
               ))}
-              <button
-                type="button"
-                onClick={addPlayerInput}
-                className="bg-green-600/20 text-green-400 font-medium px-4 py-2 rounded-lg hover:bg-green-600/30 transition-colors text-sm border border-green-600/30"
-              >
-                {t('teams.form.addPlayer')}
+              <button type="button" onClick={addPlayerInput} className="btn-green-ghost"
+                style={{ alignSelf: 'flex-start' }}>
+                + {t('teams.form.addPlayer')}
               </button>
-
-              {/* Modal Footer */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-700 mt-4">
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="w-full sm:flex-1 px-5 py-2.5 rounded-xl font-medium text-gray-300 bg-slate-700 hover:bg-slate-600 transition-colors"
-                >
+              <div style={{ display: 'flex', gap: 10, paddingTop: 8,
+                borderTop: '1px solid rgba(74,222,128,0.12)', marginTop: 4 }}>
+                <button type="button" onClick={resetForm} className="btn-ghost" style={{ flex: 1 }}>
                   {t('teams.form.cancel')}
                 </button>
-                <button
-                  type="submit"
-                  className="w-full sm:flex-1 px-5 py-2.5 rounded-xl font-medium text-white bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-900/20 transition-all"
-                >
+                <button type="submit" className="btn-primary" style={{ flex: 1 }}>
                   {t('teams.form.updateTeam')}
                 </button>
               </div>
@@ -627,304 +701,239 @@ const FormContainer = React.memo(({
     );
   }
 
-  // Show inline form for creating new team
   return (
     <div style={{ display: showForm ? 'block' : 'none' }}>
-      <TeamForm form={form} setForm={setForm} playersForm={playersForm} setPlayersForm={setPlayersForm} handleTeamInputChange={handleTeamInputChange} handlePlayerChange={handlePlayerChange} addPlayerInput={addPlayerInput} removePlayerInput={removePlayerInput} handleSubmit={handleSubmit} editingTeamId={editingTeamId} resetForm={resetForm} handleLogoUpload={handleLogoUpload} handlePlayerPhotoUpload={handlePlayerPhotoUpload} />
+      <TeamForm form={form} setForm={setForm} playersForm={playersForm} setPlayersForm={setPlayersForm}
+        handleTeamInputChange={handleTeamInputChange} handlePlayerChange={handlePlayerChange}
+        addPlayerInput={addPlayerInput} removePlayerInput={removePlayerInput}
+        handleSubmit={handleSubmit} editingTeamId={editingTeamId} resetForm={resetForm}
+        handleLogoUpload={handleLogoUpload} handlePlayerPhotoUpload={handlePlayerPhotoUpload} />
     </div>
   );
 });
 
+/* ─────────────────────────────────────────────
+   Teams — root
+───────────────────────────────────────────── */
 const Teams: React.FC = () => {
   const { t } = useTranslation();
   const [teams, setTeams] = useState<Team[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
-  const [selectedPlayersPerTeam, setSelectedPlayersPerTeam] = useState<Record<string, Set<string>>>({});
   const [user, setUser] = useState<any>(null);
-  const [deferredSearchQuery, setDeferredSearchQuery] = useState('');
-
+  const [searchQuery, setSearchQuery] = useState('');
   const [deletingPlayerIds, setDeletingPlayerIds] = useState<Set<string>>(new Set());
   const [deletingTeamIds, setDeletingTeamIds] = useState<Set<string>>(new Set());
 
-  // Refs for memoized handlers to avoid re-renders
   const deletingTeamIdsRef = React.useRef(deletingTeamIds);
   const deletingPlayerIdsRef = React.useRef(deletingPlayerIds);
-  const selectedPlayersPerTeamRef = React.useRef(selectedPlayersPerTeam);
+  useEffect(() => { deletingTeamIdsRef.current = deletingTeamIds; }, [deletingTeamIds]);
+  useEffect(() => { deletingPlayerIdsRef.current = deletingPlayerIds; }, [deletingPlayerIds]);
+
+  const fetchTeams = useCallback(async () => {
+    try { const res = await api.get<Team[]>('/teams'); setTeams(res.data); }
+    catch (err) { console.error('Fetch teams failed:', err); }
+  }, []);
 
   useEffect(() => {
-    deletingTeamIdsRef.current = deletingTeamIds;
-  }, [deletingTeamIds]);
+    api.get('/users/me').then(({ data }) => setUser(data)).catch(() => {});
+    fetchTeams();
+  }, [fetchTeams]);
 
-  useEffect(() => {
-    deletingPlayerIdsRef.current = deletingPlayerIds;
-  }, [deletingPlayerIds]);
+  const visibleTeams = useMemo(() => {
+    if (!searchQuery) return teams;
+    const q = searchQuery.toLowerCase();
+    return teams.filter((t) =>
+      t.teamFullName.toLowerCase().includes(q) || t.teamTag.toLowerCase().includes(q)
+    );
+  }, [teams, searchQuery]);
 
-  useEffect(() => {
-    selectedPlayersPerTeamRef.current = selectedPlayersPerTeam;
-  }, [selectedPlayersPerTeam]);
-
-  useEffect(() => {
-    selectedPlayersPerTeamRef.current = selectedPlayersPerTeam;
-  }, [selectedPlayersPerTeam]);
-
-  const filteredTeamIds = useMemo(() => {
-    const ids = new Set<string>();
-    teams.forEach(team => {
-      if (team.teamFullName.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-        team.teamTag.toLowerCase().includes(deferredSearchQuery.toLowerCase())) {
-        ids.add(team._id);
-      }
-    });
-    return ids;
-  }, [teams, deferredSearchQuery]);
+  const handleSearchChange = useCallback((q: string) => setSearchQuery(q), []);
 
   const handleAddTeamClick = useCallback(() => {
     flushSync(() => {
-      if (showForm) {
-        setShowForm(false);
-        setEditingTeamId(null);
-      } else {
-        setShowForm(true);
-      }
+      if (showForm) { setShowForm(false); setEditingTeamId(null); }
+      else setShowForm(true);
     });
   }, [showForm]);
 
-  const startEditTeam = useCallback((team: Team) => {
-    setEditingTeamId(team._id);
-  }, []);
-
-  // --- Auth check ---
-  const checkAuth = async () => {
-    try {
-      const { data } = await api.get("/users/me");
-      setUser(data);
-      return data;
-    } catch {
-      return null;
-    }
-  };
-
-  useEffect(() => {
-    checkAuth();
-    fetchTeams();
-  }, []);
-
-  const fetchTeams = async () => {
-    try {
-      const res = await api.get<Team[]>('/teams');
-      setTeams(res.data);
-    } catch (err) {
-      console.error('Fetch teams failed:', err);
-    }
-  };
-
-  // Navigation button handlers
-  const goToTournaments = () => {
-    window.location.href = '/dashboard'; // adjust route as needed
-  };
-  const goToAddTeams = () => {
-    setShowForm(true);
-  };
-  const goToDisplayHUD = () => {
-    window.location.href = '/displayhud'; // adjust route as needed
-  };
-
-
+  const startEditTeam = useCallback((team: Team) => setEditingTeamId(team._id), []);
 
   const deleteTeam = useCallback(async (id: string) => {
     if (!window.confirm('Delete this team?')) return;
     if (deletingTeamIdsRef.current.has(id)) return;
-
     setDeletingTeamIds((prev) => new Set(prev).add(id));
-    setTeams((prev) => prev.filter((team) => team._id !== id));
-
-    try {
-      await api.delete(`/teams/${id}`);
-    } catch (err) {
-      alert('Failed to delete team');
-      console.error(err);
-      fetchTeams();
-    } finally {
-      setDeletingTeamIds((prev) => {
-        const copy = new Set(prev);
-        copy.delete(id);
-        return copy;
-      });
-    }
-  }, []);
+    setTeams((prev) => prev.filter((t) => t._id !== id));
+    try { await api.delete(`/teams/${id}`); }
+    catch (err) { alert('Failed to delete team'); console.error(err); fetchTeams(); }
+    finally { setDeletingTeamIds((prev) => { const c = new Set(prev); c.delete(id); return c; }); }
+  }, [fetchTeams]);
 
   const deletePlayer = useCallback(async (teamId: string, playerId: string) => {
     if (!window.confirm('Delete this player?')) return;
     if (deletingPlayerIdsRef.current.has(playerId)) return;
-
     setDeletingPlayerIds((prev) => new Set(prev).add(playerId));
     try {
       await api.delete(`/teams/${teamId}/players/${playerId}`);
-
-      setTeams((prev) =>
-        prev.map((team) =>
-          team._id === teamId
-            ? { ...team, players: team.players.filter((p) => p._id !== playerId) }
-            : team
-        )
-      );
-
-    } catch (err) {
-      alert('Failed to delete player');
-      console.error(err);
-    } finally {
-      setDeletingPlayerIds((prev) => {
-        const copy = new Set(prev);
-        copy.delete(playerId);
-        return copy;
-      });
-    }
+      // ✅ Update parent state immediately so the card re-renders with player removed
+      setTeams((prev) => prev.map((t) =>
+        t._id === teamId ? { ...t, players: t.players.filter((p) => p._id !== playerId) } : t
+      ));
+    } catch (err) { alert('Failed to delete player'); console.error(err); }
+    finally { setDeletingPlayerIds((prev) => { const c = new Set(prev); c.delete(playerId); return c; }); }
   }, []);
 
-  const deleteSelectedPlayers = useCallback(async (teamId: string) => {
-    const selectedSet = selectedPlayersPerTeamRef.current[teamId];
-    if (!selectedSet || selectedSet.size === 0) return;
-    if (!window.confirm('Delete selected players?')) return;
-
-    const playerIdsArray = Array.from(selectedSet);
-
+  // ✅ Root owns the API call + state update; TeamCard just clears its local selection
+  const deleteSelectedPlayers = useCallback(async (teamId: string, playerIds: string[]) => {
     try {
-      await api.delete(`/teams/${teamId}/players`, {
-        data: { playerIds: playerIdsArray },
-      });
-
-      setTeams((prev) =>
-        prev.map((team) =>
-          team._id === teamId
-            ? { ...team, players: team.players.filter((p) => !selectedSet.has(p._id!)) }
-            : team
-        )
-      );
-
-
-      // Clear selection for this team only
-      setSelectedPlayersPerTeam((prev) => ({ ...prev, [teamId]: new Set() }));
+      await api.delete(`/teams/${teamId}/players`, { data: { playerIds } });
+      // ✅ This triggers TeamCard to re-render with updated players prop,
+      //    which triggers the useEffect that prunes stale selected ids
+      setTeams((prev) => prev.map((t) =>
+        t._id === teamId
+          ? { ...t, players: t.players.filter((p) => !playerIds.includes(p._id!)) }
+          : t
+      ));
     } catch (err) {
       alert('Failed to delete selected players');
       console.error(err);
+      throw err; // re-throw so TeamCard's catch fires and does NOT clear selection
     }
   }, []);
 
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header/Navigation Bar - Matching Dashboard */}
-      <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700/50 sticky top-0 z-50">
-            <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
-              <div className="flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
-                {/* Logo */}
-                <div className="flex items-center gap-3">
-                  <img
-                    src="./logo.png"
-                    alt="ScoreSync Logo"
-                    className="w-[70px] h-[70px] rounded-lg shadow-lg"
-                  />
-                  <div>
-                  <h1 className="text-[1rem] font-bold text-white">{t('dashboard.header.title')}</h1>
-                   <h1 className="text-[1rem] font-bold text-white">{t('dashboard.header.subtitle')}</h1>
-                   </div>
-                </div>
-    
-                {/* Navigation Buttons */}
-                <nav className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
-                  <button
-                    onClick={() => (window.location.href = '/dashboard')}
-                    className="bg-purple-600 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    {t('dashboard.nav.tournaments')}
-                  </button>
-                  <button
-                    onClick={() => window.open('/teams', '_blank', 'noopener,noreferrer')}
-                    className="bg-slate-700 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
-                  >
-                    {t('dashboard.nav.teams')}
-                  </button>
-                  <button
-                    onClick={() => window.open('/displayhud', '_blank', 'noopener,noreferrer')}
-                    className="bg-slate-700 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
-                  >
-                    {t('dashboard.nav.hud')}
-                  </button>
-                </nav>
-    
-                {/* User Info */}
-                <div className="flex items-center gap-2 md:gap-4">
-                  {user && (
-                    <span className="text-sm text-gray-300 font-medium">
-                      {t('dashboard.header.admin')}<span className="text-white">{user.username}</span>
-                    </span>
-                  )}
-                  <div className="flex items-center gap-2 text-sm text-gray-300">
-                    <span>{t('dashboard.header.help')}</span>
-                    <FaDiscord
-                      className="cursor-pointer text-2xl text-gray-300 hover:text-purple-400 transition-colors"
-                      onClick={() => window.open('https://discord.com/channels/623776491682922526/1426117227257663558', '_blank')}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </header>
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Page Header */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">{t('teams.header.title')}</h2>
-          <p className="text-gray-400">{t('teams.header.subtitle')}</p>
+    <div className="cyber-root min-h-screen"
+      style={{ background: 'linear-gradient(135deg, #052005 0%, #000000 50%, #052005 100%)' }}>
+      <style>{CYBER_STYLES}</style>
+
+      <div className="scan-line" />
+      <div className="hex-bg" />
+      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+        background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74,222,128,0.09), transparent)' }} />
+
+      {/* ── SIDEBAR ── */}
+      <div style={{
+        position: 'fixed', left: 0, top: 0, height: '100%', width: 78, zIndex: 50,
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        padding: '24px 0', gap: 8,
+        background: 'rgba(0,0,0,0.88)', borderRight: '1px solid rgba(74,222,128,0.2)',
+        backdropFilter: 'blur(24px)', boxShadow: '4px 0 24px rgba(0,0,0,0.6)'
+      }}>
+        <div style={{ width: 40, height: 40, borderRadius: 12, marginBottom: 8,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          border: '1px solid rgba(74,222,128,0.45)', background: 'rgba(74,222,128,0.08)',
+          boxShadow: '0 0 10px rgba(74,222,128,0.18)' }}>
+          <img src="./logo.png" alt="logo" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6 }} />
+        </div>
+        {user && (
+          <div style={{ width: 50, padding: '4px 2px', borderRadius: 8, marginBottom: 4,
+            background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.2)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%',
+              background: '#4ade80', boxShadow: '0 0 6px #4ade80' }} />
+            <span style={{ fontSize: 9, color: '#4ade80', letterSpacing: '0.5px', fontWeight: 700,
+              maxWidth: 46, overflow: 'hidden', textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap', textAlign: 'center', padding: '0 3px' }}>
+              {user.username}
+            </span>
+          </div>
+        )}
+        <div style={{ width: 40, height: 1, background: 'rgba(74,222,128,0.2)', margin: '2px 0 6px' }} />
+        <button className="sidebar-btn" onClick={() => (window.location.href = '/dashboard')}>
+          <FaTrophy size={20} />
+          <span style={{ fontSize: 10, marginTop: 4, letterSpacing: '0.5px', fontWeight: 600 }}>TOUR</span>
+        </button>
+        <button className="sidebar-btn active">
+          <FaUsers size={20} />
+          <span style={{ fontSize: 10, marginTop: 4, letterSpacing: '0.5px', fontWeight: 600 }}>TEAMS</span>
+        </button>
+        <button className="sidebar-btn" onClick={() => window.open('/displayhud', '_blank', 'noopener,noreferrer')}>
+          <FaEye size={20} />
+          <span style={{ fontSize: 10, marginTop: 4, letterSpacing: '0.5px', fontWeight: 600 }}>HUD</span>
+        </button>
+        <div style={{ flex: 1 }} />
+        <button className="sidebar-btn"
+          onClick={() => window.open('https://discord.com/channels/623776491682922526/1426117227257663558', '_blank')}>
+          <FaDiscord size={20} />
+          <span style={{ fontSize: 10, marginTop: 4, letterSpacing: '0.5px', fontWeight: 600 }}>HELP</span>
+        </button>
+      </div>
+
+      {/* ── MAIN ── */}
+      <main style={{ marginLeft: 78, padding: '32px 28px', position: 'relative', zIndex: 1 }}>
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <span className="tag">TEAMS</span>
+          </div>
+          <h2 className="orbitron font-black text-white"
+            style={{ fontSize: 26, letterSpacing: 1, marginBottom: 4 }}>
+            {t('teams.header.title')}
+          </h2>
+          <p style={{ color: '#6b7280', fontSize: 14 }}>{t('teams.header.subtitle')}</p>
         </div>
 
-        {/* Add Team Button */}
-        <button
-          onClick={handleAddTeamClick}
-          className="bg-purple-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors mb-6 shadow-lg"
-        >
-          {showForm ? t('teams.form.cancel') : editingTeamId ? t('teams.form.editTitle') : '+ ' + t('dashboard.nav.teams')}
+        <button className="btn-primary" style={{ padding: '12px 28px', marginBottom: 28 }}
+          onClick={handleAddTeamClick}>
+          {showForm ? t('teams.form.cancel') : `+ ${t('dashboard.nav.teams')}`}
         </button>
 
-        <FormContainer showForm={showForm} setShowForm={setShowForm} editingTeamId={editingTeamId} setEditingTeamId={setEditingTeamId} teams={teams} setTeams={setTeams} />
+        <FormContainer showForm={showForm} setShowForm={setShowForm}
+          editingTeamId={editingTeamId} setEditingTeamId={setEditingTeamId}
+          teams={teams} setTeams={setTeams} />
 
-
-        {/* Teams List */}
-        <div className="mb-6">
-          <h3 className="text-2xl font-bold text-white mb-4">{t('dashboard.nav.teams')}</h3>
-          <SearchInput onSearchChange={setDeferredSearchQuery} />
-        </div>
-
-        <div style={{ display: filteredTeamIds.size === 0 ? 'block' : 'none' }}>
-          <div className="text-center py-16">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-800/50 mb-4">
-              <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-gray-400 mb-2">{t('teams.messages.noTeams')}</h3>
-            <p className="text-gray-500 mb-6">{t('teams.messages.createFirst')}</p>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <span className="tag">ROSTER</span>
+            <h3 className="orbitron font-bold text-white" style={{ fontSize: 15 }}>
+              {t('dashboard.nav.teams')}
+            </h3>
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: '#4b5563',
+              fontFamily: 'Orbitron, monospace' }}>
+              {visibleTeams.length} / {teams.length}
+            </span>
           </div>
+          <SearchInput onSearchChange={handleSearchChange} />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6" style={{ display: filteredTeamIds.size > 0 ? 'grid' : 'none' }}>
-          {teams.map((team) => (
-            <TeamCard
-              key={team._id}
-              team={team}
-              selectedForTeam={selectedPlayersPerTeam[team._id] || EMPTY_SET}
-              setSelectedPlayersPerTeam={setSelectedPlayersPerTeam}
-              startEditTeam={startEditTeam}
-              deleteTeam={deleteTeam}
-              deletePlayer={deletePlayer}
-              deleteSelectedPlayers={deleteSelectedPlayers}
-              deletingPlayerIds={deletingPlayerIds}
-              deletingTeamIds={deletingTeamIds}
-              isVisible={filteredTeamIds.has(team._id)}
-            />
-          ))}
-        </div>
+        {visibleTeams.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '64px 24px' }}>
+            <div style={{ width: 72, height: 72, borderRadius: '50%', margin: '0 auto 20px',
+              background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.25)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 0 20px rgba(74,222,128,0.1)' }}>
+              <FaUsers size={28} style={{ color: '#4ade80', opacity: 0.6 }} />
+            </div>
+            <h3 className="orbitron font-bold text-white" style={{ fontSize: 17, marginBottom: 8 }}>
+              {t('teams.messages.noTeams')}
+            </h3>
+            <p style={{ color: '#6b7280', marginBottom: 24, fontSize: 14 }}>
+              {t('teams.messages.createFirst')}
+            </p>
+            <button className="btn-primary" style={{ padding: '12px 32px' }}
+              onClick={() => setShowForm(true)}>
+              + {t('dashboard.nav.teams')}
+            </button>
+          </div>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+            gap: 18
+          }}>
+            {visibleTeams.map((team) => (
+              <TeamCard
+                key={team._id}
+                team={team}
+                onEdit={startEditTeam}
+                onDelete={deleteTeam}
+                onDeletePlayer={deletePlayer}
+                onDeleteSelectedPlayers={deleteSelectedPlayers}
+                deletingTeamIds={deletingTeamIds}
+                deletingPlayerIds={deletingPlayerIds}
+              />
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );

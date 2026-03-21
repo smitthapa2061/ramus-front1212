@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate } from 'react-router-dom';
-import api from '../login/api.tsx'; // <-- your axios instance
+import { FaEdit, FaTrash, FaClock, FaMap, FaChevronRight } from 'react-icons/fa';
+import api from '../login/api.tsx';
 
 interface Match {
   _id: string;
@@ -11,95 +12,422 @@ interface Match {
   groups?: {
     _id: string;
     groupName: string;
-    slots?: {
-      _id: string;
-      slot: number;
-      team: {
-        _id: string;
-        teamFullName: string;
-      };
-    }[];
+    slots?: { _id: string; slot: number; team: { _id: string; teamFullName: string } }[];
   }[];
 }
 
 interface GroupData {
   _id: string;
   groupName: string;
-  slots?: {
-    _id: string;
-    slot: number;
-    team: {
-      _id: string;
-      teamFullName: string;
-    };
-  }[];
+  slots?: { _id: string; slot: number; team: { _id: string; teamFullName: string } }[];
 }
 
+// ── 4 maps only ───────────────────────────────────────────────────────────────
+const MAPS = ['Erangel', 'Miramar', 'Rondo', 'Sanhok'] as const;
+type MapName = typeof MAPS[number];
+
+const MAP_COLORS: Record<MapName, string> = {
+  Erangel: '#4ade80',
+  Miramar: '#f59e0b',
+  Rondo:   '#60a5fa',
+  Sanhok:  '#34d399',
+};
+
+// Map descriptors shown in the picker card
+const MAP_DESC: Record<MapName, string> = {
+  Erangel: 'Temperate · 8×8 km',
+  Miramar: 'Desert · 8×8 km',
+  Rondo:   'Urban · 8×8 km',
+  Sanhok:  'Tropical · 4×4 km',
+};
+
+// ── Styles ─────────────────────────────────────────────────────────────────────
+const STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+  .m-root { font-family: 'Rajdhani', sans-serif; }
+  .m-root *, .m-root *::before, .m-root *::after { box-sizing: border-box; }
+  .m-orb { font-family: 'Orbitron', monospace !important; }
+
+  /* ── Page ── */
+  .m-page {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #052e16 0%, #000000 50%, #052e16 100%);
+    padding: 32px; position: relative; overflow: hidden;
+  }
+  .m-hex {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: radial-gradient(circle, rgba(74,222,128,0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .m-scan {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.02;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(74,222,128,0.5) 2px, rgba(74,222,128,0.5) 4px);
+  }
+  .m-glow {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background: radial-gradient(ellipse 80% 40% at 50% -5%, rgba(74,222,128,0.1), transparent);
+  }
+  .m-inner { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; }
+
+  /* ── Page header ── */
+  .m-page-hdr {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 32px; padding-bottom: 24px;
+    border-bottom: 1px solid rgba(74,222,128,0.18);
+  }
+  .m-tag {
+    display: inline-block;
+    background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.3);
+    color: #4ade80; font-family: 'Orbitron', monospace;
+    font-size: 10px; letter-spacing: 1px;
+    padding: 3px 10px; border-radius: 4px; margin-bottom: 8px;
+  }
+  .m-page-title { font-family: 'Orbitron', monospace; font-size: 26px; font-weight: 900; color: #fff; letter-spacing: 1px; margin: 0 0 4px; }
+  .m-page-sub { color: #6b7280; font-size: 13px; letter-spacing: 0.3px; }
+
+  /* ── Stats bar ── */
+  .m-statsbar { display: flex; gap: 14px; margin-bottom: 28px; }
+  .m-stat {
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(74,222,128,0.14);
+    border-radius: 10px; padding: 13px 20px;
+    display: flex; flex-direction: column; gap: 2px; min-width: 100px;
+  }
+  .m-stat-val { font-family: 'Orbitron', monospace; font-size: 22px; font-weight: 900; color: #4ade80; }
+  .m-stat-lbl { font-size: 11px; color: #6b7280; letter-spacing: 0.5px; text-transform: uppercase; }
+
+  /* ── Buttons ── */
+  .m-btn-primary {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: #fff; border: 1px solid rgba(74,222,128,0.5);
+    font-family: 'Orbitron', monospace; font-size: 11px; font-weight: 700;
+    letter-spacing: 1px; padding: 11px 24px; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .m-btn-primary:hover { box-shadow: 0 0 18px rgba(74,222,128,0.35); }
+  .m-btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .m-btn-ghost {
+    background: rgba(0,0,0,0.45); color: #9ca3af;
+    border: 1px solid rgba(74,222,128,0.18);
+    font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 600;
+    padding: 11px 22px; border-radius: 8px; cursor: pointer;
+  }
+  .m-btn-ghost:hover { background: rgba(74,222,128,0.06); color: #4ade80; border-color: rgba(74,222,128,0.4); }
+
+  .m-btn-save {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: #fff; border: 1px solid rgba(74,222,128,0.4);
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; padding: 9px 18px; border-radius: 7px; cursor: pointer;
+  }
+  .m-btn-save:hover { box-shadow: 0 0 14px rgba(74,222,128,0.3); }
+
+  .m-btn-cancel {
+    background: rgba(0,0,0,0.4); color: #6b7280;
+    border: 1px solid rgba(255,255,255,0.08);
+    font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 600;
+    padding: 9px 18px; border-radius: 7px; cursor: pointer;
+  }
+  .m-btn-cancel:hover { color: #9ca3af; }
+
+  /* ══════════════════════════════════════════
+     REMODELED FORM
+  ══════════════════════════════════════════ */
+  .m-form-panel {
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(74,222,128,0.22);
+    border-radius: 18px; margin-bottom: 28px;
+    overflow: hidden;
+    box-shadow: 0 0 40px rgba(74,222,128,0.05);
+  }
+
+  /* Form top bar */
+  .m-form-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 28px;
+    background: rgba(0,0,0,0.4);
+    border-bottom: 1px solid rgba(74,222,128,0.12);
+  }
+  .m-form-topbar-l { display: flex; align-items: center; gap: 10px; }
+  .m-form-title { font-family: 'Orbitron', monospace; font-size: 14px; font-weight: 700; color: #fff; letter-spacing: 0.5px; }
+
+  /* Form body — two column layout */
+  .m-form-body {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+  }
+
+  /* Left column — map picker + fields */
+  .m-form-left {
+    padding: 24px 28px;
+    border-right: 1px solid rgba(74,222,128,0.1);
+  }
+
+  /* Right column — groups */
+  .m-form-right {
+    padding: 24px 28px;
+    display: flex; flex-direction: column;
+  }
+
+  .m-field-lbl {
+    font-size: 10px; color: #6b7280; letter-spacing: 1px;
+    text-transform: uppercase; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .m-field-lbl::before { content: ''; width: 3px; height: 11px; background: #4ade80; border-radius: 2px; box-shadow: 0 0 5px #4ade80; }
+
+  .m-input {
+    width: 100%; padding: 11px 14px;
+    background: rgba(0,0,0,0.6); border: 1px solid rgba(74,222,128,0.2);
+    border-radius: 8px; color: #fff;
+    font-family: 'Rajdhani', sans-serif; font-size: 15px; outline: none;
+  }
+  .m-input::placeholder { color: rgba(156,163,175,0.35); }
+  .m-input:focus { border-color: rgba(74,222,128,0.6); box-shadow: 0 0 0 2px rgba(74,222,128,0.1); }
+
+  /* Two small fields side by side */
+  .m-fields-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+
+  /* ── Map picker cards ── */
+  .m-map-picker-lbl { margin-bottom: 12px; }
+  .m-map-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .m-map-card {
+    position: relative; cursor: pointer; user-select: none;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(74,222,128,0.12);
+    border-radius: 11px; padding: 14px 14px 12px;
+    overflow: hidden;
+  }
+  .m-map-card:hover { border-color: rgba(74,222,128,0.35); background: rgba(74,222,128,0.04); }
+
+  /* selected state driven by --mc (map color) CSS var */
+  .m-map-card.mc-sel {
+    border-color: var(--mc);
+    background: rgba(0,0,0,0.7);
+    box-shadow: 0 0 0 1px var(--mc), 0 0 18px color-mix(in srgb, var(--mc) 25%, transparent);
+  }
+
+  /* color bar top */
+  .m-map-card-bar {
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--mc); opacity: 0.4;
+  }
+  .m-map-card.mc-sel .m-map-card-bar { opacity: 1; }
+
+  .m-map-card-name {
+    font-family: 'Orbitron', monospace; font-size: 13px; font-weight: 900;
+    color: #9ca3af; letter-spacing: 0.5px; margin-bottom: 3px;
+  }
+  .m-map-card.mc-sel .m-map-card-name { color: var(--mc); }
+
+  .m-map-card-desc { font-size: 11px; color: #374151; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; letter-spacing: 0.3px; }
+  .m-map-card.mc-sel .m-map-card-desc { color: #6b7280; }
+
+  /* check dot */
+  .m-map-check {
+    position: absolute; top: 8px; right: 9px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--mc); display: none;
+    align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 900; color: #000;
+  }
+  .m-map-card.mc-sel .m-map-check { display: flex; box-shadow: 0 0 6px var(--mc); }
+
+  /* ── Group chips ── */
+  .m-groups-lbl { margin-bottom: 12px; }
+  .m-groups-list { display: flex; flex-direction: column; gap: 7px; flex: 1; overflow-y: auto; }
+
+  .m-group-chip {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 14px; border-radius: 9px; cursor: pointer;
+    background: rgba(0,0,0,0.4); border: 1px solid rgba(74,222,128,0.1);
+    user-select: none;
+  }
+  .m-group-chip:hover { border-color: rgba(74,222,128,0.32); background: rgba(74,222,128,0.04); }
+  .m-group-chip.gc-active { background: rgba(74,222,128,0.09); border-color: #4ade80; }
+
+  .m-group-chip-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    background: rgba(74,222,128,0.2); border: 1px solid rgba(74,222,128,0.3);
+  }
+  .m-group-chip.gc-active .m-group-chip-dot { background: #4ade80; box-shadow: 0 0 6px #4ade80; border-color: #4ade80; }
+
+  .m-group-chip-name { font-family: 'Orbitron', monospace; font-size: 11px; font-weight: 700; color: #6b7280; letter-spacing: 0.3px; flex: 1; }
+  .m-group-chip.gc-active .m-group-chip-name { color: #4ade80; }
+
+  .m-group-chip-check {
+    font-size: 10px; color: #4ade80; font-weight: 900; opacity: 0;
+  }
+  .m-group-chip.gc-active .m-group-chip-check { opacity: 1; }
+
+  .m-no-groups { font-family: 'Orbitron', monospace; font-size: 10px; color: #1f2937; letter-spacing: 1px; text-align: center; padding: 24px; border: 1px dashed rgba(74,222,128,0.08); border-radius: 9px; }
+
+  /* Form footer */
+  .m-form-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 28px;
+    border-top: 1px solid rgba(74,222,128,0.1);
+    background: rgba(0,0,0,0.35);
+  }
+  .m-form-footer-info { font-size: 12px; color: #374151; font-family: 'Orbitron', monospace; letter-spacing: 0.5px; }
+  .m-form-footer-info span { color: #4ade80; font-weight: 900; }
+  .m-form-footer-actions { display: flex; gap: 10px; }
+
+  /* ── Spinner sm ── */
+  .m-spinner-sm {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.2); border-top-color: #fff;
+    border-radius: 50%; animation: mspin 0.8s linear infinite; display: inline-block;
+  }
+
+  /* ══════════════════════════════════════════
+     MATCH LIST
+  ══════════════════════════════════════════ */
+  .m-divider {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+  }
+  .m-divider span { font-family: 'Orbitron', monospace; font-size: 10px; letter-spacing: 2px; color: #4ade80; white-space: nowrap; }
+  .m-divider::before, .m-divider::after { content: ''; flex: 1; height: 1px; background: rgba(74,222,128,0.2); }
+
+  .m-list { display: flex; flex-direction: column; gap: 10px; padding-bottom: 48px; }
+
+  .m-row {
+    position: relative; overflow: hidden;
+    background: rgba(0,0,0,0.45); border: 1px solid rgba(74,222,128,0.12);
+    border-radius: 14px; cursor: pointer;
+  }
+  .m-row:hover { border-color: rgba(74,222,128,0.38); box-shadow: 0 0 20px rgba(74,222,128,0.07); }
+
+  .m-row-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+  .m-row-body { padding: 18px 20px 18px 24px; display: flex; align-items: center; gap: 16px; }
+
+  .m-match-num {
+    font-family: 'Orbitron', monospace; font-size: 11px; font-weight: 900; color: #000;
+    border-radius: 7px; padding: 6px 12px; flex-shrink: 0; letter-spacing: 0.5px;
+  }
+
+  .m-map-block { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .m-map-name { font-family: 'Orbitron', monospace; font-size: 16px; font-weight: 900; color: #fff; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .m-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  .m-time-chip {
+    display: flex; align-items: center; gap: 5px; font-size: 12px; color: #9ca3af;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    padding: 3px 10px; border-radius: 5px;
+  }
+  .m-group-pill {
+    font-size: 11px; color: #4ade80;
+    background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.2);
+    padding: 2px 9px; border-radius: 4px;
+    font-family: 'Orbitron', monospace; letter-spacing: 0.3px;
+  }
+
+  .m-row-actions { display: flex; gap: 6px; flex-shrink: 0; opacity: 0; }
+  .m-row:hover .m-row-actions { opacity: 1; }
+  .m-nav-arrow { color: #1f2937; flex-shrink: 0; }
+  .m-row:hover .m-nav-arrow { color: #4ade80; }
+
+  .m-ic-btn { width: 32px; height: 32px; border-radius: 7px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .m-ic-edit { background: rgba(37,99,235,0.75); }
+  .m-ic-edit:hover { background: rgba(37,99,235,1); box-shadow: 0 0 10px rgba(59,130,246,0.4); }
+  .m-ic-del { background: rgba(220,38,38,0.75); }
+  .m-ic-del:hover { background: rgba(220,38,38,1); box-shadow: 0 0 10px rgba(239,68,68,0.4); }
+
+  /* ── Inline edit ── */
+  .m-edit-form { padding: 16px 22px; border-top: 1px solid rgba(74,222,128,0.1); background: rgba(0,0,0,0.3); }
+  .m-edit-grid { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 12px; margin-bottom: 14px; }
+
+  /* ── Map picker inline (edit mode) ── */
+  .m-edit-map-row { display: flex; gap: 8px; }
+  .m-edit-map-chip {
+    flex: 1; padding: 9px 8px; border-radius: 8px; cursor: pointer; text-align: center;
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(74,222,128,0.1);
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    color: #4b5563; letter-spacing: 0.3px; user-select: none;
+  }
+  .m-edit-map-chip:hover { border-color: rgba(74,222,128,0.3); color: #9ca3af; }
+  .m-edit-map-chip.emc-sel { border-color: var(--mc); color: var(--mc); background: rgba(0,0,0,0.7); box-shadow: 0 0 0 1px var(--mc); }
+
+  .m-edit-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* ── Loading ── */
+  .m-loading {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #052e16 0%, #000 50%, #052e16 100%);
+    flex-direction: column; gap: 16px;
+  }
+  .m-spinner { width: 48px; height: 48px; border: 3px solid rgba(74,222,128,0.12); border-top-color: #4ade80; border-radius: 50%; animation: mspin 1s linear infinite; }
+  @keyframes mspin { to { transform: rotate(360deg); } }
+  .m-loading-txt { font-family: 'Orbitron', monospace; font-size: 12px; color: #4ade80; letter-spacing: 2px; }
+
+  /* ── Empty ── */
+  .m-empty { text-align: center; padding: 64px 24px; }
+  .m-empty-icon {
+    width: 68px; height: 68px; border-radius: 50%; margin: 0 auto 20px;
+    background: rgba(74,222,128,0.07); border: 1px solid rgba(74,222,128,0.25);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 20px rgba(74,222,128,0.1);
+  }
+  .m-empty-title { font-family: 'Orbitron', monospace; font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+  .m-empty-sub { color: #6b7280; font-size: 14px; margin-bottom: 24px; }
+`;
+
+// ── Component ──────────────────────────────────────────────────────────────────
 const Match: React.FC = () => {
   const { t } = useTranslation();
   const { tournamentId, roundId } = useParams<{ tournamentId: string; roundId: string }>();
   const navigate = useNavigate();
 
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [groups, setGroups] = useState<GroupData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newMatchNo, setNewMatchNo] = useState<number>(1);
-  const [newTime, setNewTime] = useState<string>('00:00');
-  const [newMap, setNewMap] = useState<string>('');
+  const [matches, setMatches]           = useState<Match[]>([]);
+  const [groups, setGroups]             = useState<GroupData[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState<string | null>(null);
+  const [showAddForm, setShowAddForm]   = useState(false);
+  const [newMatchNo, setNewMatchNo]     = useState<number>(1);
+  const [newTime, setNewTime]           = useState<string>('00:00');
+  const [newMap, setNewMap]             = useState<MapName | ''>('');
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [editMatchId, setEditMatchId]   = useState<string | null>(null);
+  const [editMatchNo, setEditMatchNo]   = useState<number>(1);
+  const [editTime, setEditTime]         = useState<string>('00:00');
+  const [editMap, setEditMap]           = useState<MapName | ''>('');
+  const [isCreating, setIsCreating]     = useState(false);
 
-  const [editMatchId, setEditMatchId] = useState<string | null>(null);
-  const [editMatchNo, setEditMatchNo] = useState<number>(1);
-  const [editTime, setEditTime] = useState<string>('00:00');
-  const [editMap, setEditMap] = useState<string>('');
-
-  // ---- Cache refs ----
   const matchesCache = useRef<Record<string, Match[]>>({});
-  const groupsCache = useRef<Record<string, GroupData[]>>({});
+  const groupsCache  = useRef<Record<string, GroupData[]>>({});
 
-  const to24HourFormat = (time: string) => {
+  const to24Hour = (time: string) => {
     if (!time) return '00:00';
     if (!time.includes('AM') && !time.includes('PM')) return time;
-    const [t, modifier] = time.split(' ');
-    let [hours, minutes] = t.split(':').map(Number);
-    if (modifier === 'PM' && hours < 12) hours += 12;
-    if (modifier === 'AM' && hours === 12) hours = 0;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    const [t, mod] = time.split(' ');
+    let [h, m] = t.split(':').map(Number);
+    if (mod === 'PM' && h < 12) h += 12;
+    if (mod === 'AM' && h === 12) h = 0;
+    return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
   };
 
   const fetchData = async () => {
     if (!tournamentId || !roundId) return;
-    const cacheKey = `${tournamentId}-${roundId}`;
+    const key = `${tournamentId}-${roundId}`;
     setLoading(true);
-
-    // Check cache first
-    if (matchesCache.current[cacheKey]) {
-      setMatches(matchesCache.current[cacheKey]);
-      if (groupsCache.current[tournamentId]) {
-        setGroups(groupsCache.current[tournamentId]);
-      }
+    if (matchesCache.current[key]) {
+      setMatches(matchesCache.current[key]);
+      if (groupsCache.current[tournamentId]) setGroups(groupsCache.current[tournamentId]);
       setLoading(false);
       return;
     }
-
     try {
-      const matchesPromise = api.get(`/tournaments/${tournamentId}/rounds/${roundId}/matches`);
-      const groupsPromise = groupsCache.current[tournamentId]
-        ? Promise.resolve({ data: groupsCache.current[tournamentId] })
-        : api.get(`/tournaments/${tournamentId}/groups`);
-
-      const [matchesRes, groupsRes] = await Promise.all([matchesPromise, groupsPromise]);
-
-      setMatches(matchesRes.data);
-      setGroups(groupsRes.data);
-
-      // Save to cache
-      matchesCache.current[cacheKey] = matchesRes.data;
-      groupsCache.current[tournamentId] = groupsRes.data;
-
+      const [mRes, gRes] = await Promise.all([
+        api.get(`/tournaments/${tournamentId}/rounds/${roundId}/matches`),
+        groupsCache.current[tournamentId]
+          ? Promise.resolve({ data: groupsCache.current[tournamentId] })
+          : api.get(`/tournaments/${tournamentId}/groups`)
+      ]);
+      setMatches(mRes.data);
+      setGroups(gRes.data);
+      matchesCache.current[key] = mRes.data;
+      groupsCache.current[tournamentId] = gRes.data;
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch data');
@@ -108,42 +436,23 @@ const Match: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [tournamentId, roundId]);
+  useEffect(() => { fetchData(); }, [tournamentId, roundId]);
 
-  const [isCreating, setIsCreating] = useState(false);
-
-  // ----- Add Match -----
   const handleAddMatch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMap.trim()) return alert('Please enter the map name.');
+    if (!newMap) return alert('Please select a map.');
     if (!newTime) return alert('Please enter a valid time.');
     if (selectedGroupIds.length === 0) return alert('Select at least one group.');
-
     setIsCreating(true);
     try {
       const res = await api.post(`/tournaments/${tournamentId}/rounds/${roundId}/matches`, {
-        matchNo: newMatchNo,
-        time: newTime,
-        map: newMap.trim(),
-        groupIds: selectedGroupIds,
+        matchNo: newMatchNo, time: newTime, map: newMap, groupIds: selectedGroupIds,
       });
-
-      const addedMatch = {
-        ...res.data.match,
-        groups: groups.filter((g) => selectedGroupIds.includes(g._id)),
-      };
-
-      // Clear frontend cache
+      const added = { ...res.data.match, groups: groups.filter(g => selectedGroupIds.includes(g._id)) };
       delete matchesCache.current[`${tournamentId}-${roundId}`];
-
-      setMatches((prev) => [...prev, addedMatch]);
-
+      setMatches(prev => [...prev, added]);
       setNewMatchNo(newMatchNo + 1);
-      setNewTime('00:00');
-      setNewMap('');
-      setSelectedGroupIds([]);
+      setNewTime('00:00'); setNewMap(''); setSelectedGroupIds([]);
       setShowAddForm(false);
     } catch (err: any) {
       alert(err.message || 'Error adding match');
@@ -152,321 +461,328 @@ const Match: React.FC = () => {
     }
   };
 
-  // ----- Edit Match -----
   const startEdit = (match: Match) => {
     setEditMatchId(match._id);
     setEditMatchNo(match.matchNo);
-    setEditTime(to24HourFormat(match.time));
-    setEditMap(match.map);
+    setEditTime(to24Hour(match.time));
+    setEditMap((match.map as MapName) || '');
   };
 
   const handleUpdateMatch = async (matchId: string) => {
-    if (!editMap.trim()) return alert('Please enter the map name.');
+    if (!editMap) return alert('Please select a map.');
     if (!editTime) return alert('Please enter a valid time.');
-
     try {
       const res = await api.put(`/tournaments/${tournamentId}/rounds/${roundId}/matches/${matchId}`, {
-        matchNo: editMatchNo,
-        time: editTime,
-        map: editMap.trim(),
-        groupIds: selectedGroupIds, // Assuming groups might be editable in future, but keeping simple for now
+        matchNo: editMatchNo, time: editTime, map: editMap, groupIds: selectedGroupIds,
       });
-
-      // Clear frontend cache
       delete matchesCache.current[`${tournamentId}-${roundId}`];
-
-      setMatches((prev) => prev.map((m) => (m._id === matchId ? res.data : m)));
-
+      setMatches(prev => prev.map(m => m._id === matchId ? res.data : m));
       setEditMatchId(null);
     } catch (err: any) {
       alert(err.message || 'Error updating match');
     }
   };
 
-  // ----- Delete Match -----
   const handleDeleteMatch = async (matchId: string) => {
-    if (!window.confirm('Are you sure you want to delete this match?')) return;
-
+    if (!window.confirm('Delete this match?')) return;
     try {
       await api.delete(`/tournaments/${tournamentId}/rounds/${roundId}/matches/${matchId}`);
-
-      // Clear frontend cache
       delete matchesCache.current[`${tournamentId}-${roundId}`];
-
-      setMatches((prev) => prev.filter((m) => m._id !== matchId));
+      setMatches(prev => prev.filter(m => m._id !== matchId));
     } catch (err: any) {
       alert(err.message || 'Error deleting match');
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
-          <p className="text-purple-400 font-medium animate-pulse text-lg">Loading Matches...</p>
-        </div>
-      </div>
-    );
-  }
+  const toggleGroup = (id: string) =>
+    setSelectedGroupIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
-  if (error) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
-      <p className="text-red-500 font-semibold text-xl">Error: {error}</p>
-    </div>
+  // ── Loading / Error ──────────────────────────────────────────────────────────
+  if (loading) return (
+    <>
+      <style>{STYLES}</style>
+      <div className="m-root m-loading">
+        <div className="m-spinner" />
+        <p className="m-loading-txt">LOADING MATCHES</p>
+      </div>
+    </>
   );
 
+  if (error) return (
+    <>
+      <style>{STYLES}</style>
+      <div className="m-root m-loading">
+        <p style={{ fontFamily: 'Orbitron,monospace', color: '#f87171', fontSize: 14 }}>ERROR: {error}</p>
+      </div>
+    </>
+  );
+
+  const uniqueMaps = Array.from(new Set(matches.map(m => m.map)));
+
   return (
-    <div className="min-h-screen p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white font-sans">
-      <div className="max-w-5xl mx-auto pt-8">
+    <>
+      <style>{STYLES}</style>
+      <div className="m-root m-page">
+        <div className="m-hex" />
+        <div className="m-scan" />
+        <div className="m-glow" />
 
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight text-white">{t('matches.title')}</h2>
-            <p className="text-gray-400 mt-1">{t('matches.subtitle')}</p>
+        <div className="m-inner">
+
+          {/* ── Page Header ── */}
+          <div className="m-page-hdr">
+            <div>
+              <div className="m-tag">MATCH SCHEDULE</div>
+              <h1 className="m-orb m-page-title">{t('matches.title')}</h1>
+              <p className="m-page-sub">{t('matches.subtitle')}</p>
+            </div>
+            <button
+              className={showAddForm ? 'm-btn-ghost' : 'm-btn-primary'}
+              onClick={() => setShowAddForm(p => !p)}
+            >
+              {showAddForm ? t('matches.cancel') : `+ ${t('matches.addMatch')}`}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowAddForm((prev) => !prev)}
-            className={`px-6 py-3 rounded-lg font-medium shadow-lg transition-all ${showAddForm
-              ? 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-              : 'bg-purple-600 text-white hover:bg-purple-700'
-              }`}
-          >
-            {showAddForm ? t('matches.cancel') : '+ ' + t('matches.addMatch')}
-          </button>
-        </div>
 
-        {showAddForm && (
-          <div className="mb-8 p-8 border border-slate-700/50 rounded-xl bg-slate-800/50 backdrop-blur-sm shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
-            <h3 className="text-xl font-bold mb-6 text-white border-b border-slate-700 pb-4">{t('matches.addNewMatch')}</h3>
-            <form onSubmit={handleAddMatch} className="space-y-6">
+          {/* ── Stats Bar ── */}
+          <div className="m-statsbar">
+            <div className="m-stat">
+              <span className="m-orb m-stat-val">{matches.length}</span>
+              <span className="m-stat-lbl">Total Matches</span>
+            </div>
+            <div className="m-stat">
+              <span className="m-orb m-stat-val">{uniqueMaps.length}</span>
+              <span className="m-stat-lbl">Maps Used</span>
+            </div>
+            <div className="m-stat">
+              <span className="m-orb m-stat-val">{groups.length}</span>
+              <span className="m-stat-lbl">Groups</span>
+            </div>
+          </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label htmlFor="newMatchNo" className="block mb-2 text-sm font-medium text-gray-400">
-                    {t('matches.matchNumber')}
-                  </label>
-                  <input
-                    id="newMatchNo"
-                    type="number"
+          {/* ══════════════════════════════════════════
+              REMODELED ADD FORM
+          ══════════════════════════════════════════ */}
+          {showAddForm && (
+            <div className="m-form-panel">
 
-                    value={newMatchNo}
-                    onChange={(e) => setNewMatchNo(parseInt(e.target.value))}
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="newTime" className="block mb-2 text-sm font-medium text-gray-400">
-                    {t('matches.matchTime')}
-                  </label>
-                  <input
-                    id="newTime"
-                    type="time"
-                    value={newTime}
-                    onChange={(e) => setNewTime(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="newMap" className="block mb-2 text-sm font-medium text-gray-400">
-                    {t('matches.mapName')}
-                  </label>
-                  <select
-                    id="newMap"
-                    value={newMap}
-                    onChange={(e) => setNewMap(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all appearance-none"
-                    required
-                  >
-                    <option value="" className="bg-slate-800">{t('matches.selectMap')}</option>
-                    <option value="Erangel" className="bg-slate-800">Erangel</option>
-                    <option value="Miramar" className="bg-slate-800">Miramar</option>
-                    <option value="Sanhok" className="bg-slate-800">Sanhok</option>
-                    <option value="Rondo" className="bg-slate-800">Rondo</option>
-                    <option value="Bermuda" className="bg-slate-800">Bermuda</option>
-                    <option value="Alpine" className="bg-slate-800">Alpine</option>
-                    <option value="Nexterra" className="bg-slate-800">Nexterra</option>
-                    <option value="Purgatory" className="bg-slate-800">Purgatory</option>
-                    <option value="Kalahari" className="bg-slate-800">Kalahari</option>
-                  </select>
+              {/* Top bar */}
+              <div className="m-form-topbar">
+                <div className="m-form-topbar-l">
+                  <span className="m-tag" style={{ margin: 0 }}>NEW</span>
+                  <span className="m-orb m-form-title">{t('matches.addNewMatch')}</span>
                 </div>
               </div>
 
-              <div>
-                <p className="block mb-3 text-sm font-medium text-gray-400">{t('matches.selectGroups')}</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {groups.map((group) => (
-                    <label
-                      key={group._id}
-                      className={`flex items-center p-3 rounded-lg border cursor-pointer transition-all ${selectedGroupIds.includes(group._id)
-                        ? 'bg-purple-600/20 border-purple-500 text-white'
-                        : 'bg-slate-900/30 border-slate-700 text-gray-400 hover:bg-slate-800'
-                        }`}
-                    >
-                      <input
-                        type="checkbox"
-                        value={group._id}
-                        checked={selectedGroupIds.includes(group._id)}
-                        onChange={() => {
-                          if (selectedGroupIds.includes(group._id)) {
-                            setSelectedGroupIds(selectedGroupIds.filter((id) => id !== group._id));
-                          } else {
-                            setSelectedGroupIds([...selectedGroupIds, group._id]);
-                          }
-                        }}
-                        className="mr-3 w-4 h-4 rounded border-gray-600 text-purple-600 focus:ring-purple-500 bg-slate-700"
-                      />
-                      <span className="truncate">{group.groupName}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+              <form onSubmit={handleAddMatch}>
+                <div className="m-form-body">
 
-              <button
-                type="submit"
-                disabled={isCreating}
-                className={`w-full py-3 rounded-lg font-bold shadow-lg transition-all mt-4 flex items-center justify-center gap-2 ${isCreating
-                  ? 'bg-purple-600/50 cursor-not-allowed text-gray-300'
-                  : 'bg-purple-600 text-white hover:bg-purple-700'
-                  }`}
-              >
-                {isCreating ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    {t('matches.creating')}
-                  </>
-                ) : (
-                  t('matches.createMatch')
-                )}
-              </button>
-            </form>
-          </div>
-        )}
+                  {/* ── LEFT: fields + map picker ── */}
+                  <div className="m-form-left">
 
-        {matches.length === 0 ? (
-          <div className="text-center py-16 bg-slate-800/30 rounded-xl border border-slate-700/30 border-dashed">
-            <p className="text-xl text-gray-500 font-medium">{t('matches.noMatches')}</p>
-            <p className="text-gray-600 mt-2">{t('matches.clickAddMatch')}</p>
-          </div>
-        ) : (
-          <ul className="space-y-4 pb-12">
-            {matches.map((match) => (
-              <li
-                key={match._id}
-                onClick={() => {
-                  if (editMatchId !== match._id) {
-                    navigate(`/tournaments/${tournamentId}/rounds/${roundId}/matches/${match._id}`);
-                  }
-                }}
-                className="group relative bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 hover:border-slate-600/50 rounded-xl p-6 transition-all duration-200 backdrop-blur-sm shadow-lg hover:shadow-xl cursor-pointer"
-              >
-                {editMatchId === match._id ? (
-                  <div className="flex flex-col gap-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <input
-                        type="number"
-                        min={1}
-                        value={editMatchNo}
-                        onChange={(e) => setEditMatchNo(parseInt(e.target.value) || 1)}
-                        className="px-4 py-2 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white focus:ring-2 focus:ring-purple-500"
-                        placeholder="Match No"
-                      />
-                      <input
-                        type="time"
-                        value={editTime}
-                        onChange={(e) => setEditTime(e.target.value)}
-                        className="px-4 py-2 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white focus:ring-2 focus:ring-purple-500"
-                      />
-                      <select
-                        value={editMap}
-                        onChange={(e) => setEditMap(e.target.value)}
-                        className="px-4 py-2 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white focus:ring-2 focus:ring-purple-500"
-                      >
-                        <option value="" className="bg-slate-800">Select Map</option>
-                        <option value="Erangel" className="bg-slate-800">Erangel</option>
-                        <option value="Miramar" className="bg-slate-800">Miramar</option>
-                        <option value="Sanhok" className="bg-slate-800">Sanhok</option>
-                        <option value="Rondo" className="bg-slate-800">Rondo</option>
-                        <option value="Bermuda" className="bg-slate-800">Bermuda</option>
-                        <option value="Alpine" className="bg-slate-800">Alpine</option>
-                        <option value="Nexterra" className="bg-slate-800">Nexterra</option>
-                        <option value="Purgatory" className="bg-slate-800">Purgatory</option>
-                        <option value="Kalahari" className="bg-slate-800">Kalahari</option>
-                      </select>
+                    {/* Match No + Time */}
+                    <div className="m-fields-row">
+                      <div>
+                        <p className="m-field-lbl">{t('matches.matchNumber')}</p>
+                        <input
+                          type="number" value={newMatchNo}
+                          onChange={e => setNewMatchNo(parseInt(e.target.value))}
+                          className="m-input" required
+                        />
+                      </div>
+                      <div>
+                        <p className="m-field-lbl">{t('matches.matchTime')}</p>
+                        <input
+                          type="time" value={newTime}
+                          onChange={e => setNewTime(e.target.value)}
+                          className="m-input" required
+                        />
+                      </div>
                     </div>
-                    <div className="flex justify-end gap-3">
-                      <button
-                        onClick={() => setEditMatchId(null)}
-                        className="px-4 py-2 bg-slate-700 text-gray-300 rounded-lg hover:bg-slate-600 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => handleUpdateMatch(match._id)}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-lg"
-                      >
-                        Save Changes
-                      </button>
+
+                    {/* Map picker */}
+                    <p className="m-field-lbl m-map-picker-lbl">{t('matches.mapName')}</p>
+                    <div className="m-map-grid">
+                      {MAPS.map(map => {
+                        const color = MAP_COLORS[map];
+                        const isSelected = newMap === map;
+                        return (
+                          <div
+                            key={map}
+                            className={`m-map-card${isSelected ? ' mc-sel' : ''}`}
+                            style={{ '--mc': color } as React.CSSProperties}
+                            onClick={() => setNewMap(map)}
+                          >
+                            <div className="m-map-card-bar" />
+                            <div className="m-map-check">✓</div>
+                            <div className="m-map-card-name">{map}</div>
+                            <div className="m-map-card-desc">{MAP_DESC[map]}</div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                ) : (
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="px-3 py-1 bg-purple-500/20 text-purple-300 text-xs font-bold rounded-full border border-purple-500/30">
-                          {t('matches.matchLabel')} {match.matchNo}
-                        </span>
-                        <span className="text-gray-400 text-sm flex items-center gap-1">
-                          🕒 {match.time}
-                        </span>
+
+                  {/* ── RIGHT: group selection ── */}
+                  <div className="m-form-right">
+                    <p className="m-field-lbl m-groups-lbl">{t('matches.selectGroups')}</p>
+                    {groups.length === 0 ? (
+                      <div className="m-no-groups">NO GROUPS AVAILABLE</div>
+                    ) : (
+                      <div className="m-groups-list">
+                        {groups.map(group => {
+                          const isActive = selectedGroupIds.includes(group._id);
+                          return (
+                            <div
+                              key={group._id}
+                              className={`m-group-chip${isActive ? ' gc-active' : ''}`}
+                              onClick={() => toggleGroup(group._id)}
+                            >
+                              <span className="m-group-chip-dot" />
+                              <span className="m-group-chip-name">{group.groupName}</span>
+                              <span className="m-group-chip-check">✓</span>
+                            </div>
+                          );
+                        })}
                       </div>
+                    )}
+                  </div>
+                </div>
 
-                      <h3 className="text-xl font-bold text-white mb-1">{match.map}</h3>
+                {/* Form footer */}
+                <div className="m-form-footer">
+                  <span className="m-form-footer-info">
+                    MAP: <span>{newMap || '—'}</span>
+                    &nbsp;&nbsp;|&nbsp;&nbsp;
+                    GROUPS: <span>{selectedGroupIds.length}</span>
+                  </span>
+                  <div className="m-form-footer-actions">
+                    <button type="button" className="m-btn-cancel" onClick={() => setShowAddForm(false)}>
+                      {t('matches.cancel')}
+                    </button>
+                    <button type="submit" className="m-btn-primary" disabled={isCreating}>
+                      {isCreating
+                        ? <><span className="m-spinner-sm" />{t('matches.creating')}</>
+                        : t('matches.createMatch')
+                      }
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          )}
 
-                      {match.groups && match.groups.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          {match.groups.map((g) => (
-                            <span key={g._id} className="px-2 py-1 bg-slate-700/50 text-gray-300 text-xs rounded border border-slate-600/30">
-                              {g.groupName}
-                            </span>
-                          ))}
+          {/* ── Match List ── */}
+          {matches.length === 0 ? (
+            <div className="m-empty">
+              <div className="m-empty-icon">
+                <FaMap size={26} style={{ color: '#4ade80', opacity: 0.6 }} />
+              </div>
+              <h3 className="m-orb m-empty-title">{t('matches.noMatches')}</h3>
+              <p className="m-empty-sub">{t('matches.clickAddMatch')}</p>
+              <button className="m-btn-primary" style={{ padding: '12px 32px', margin: '0 auto' }} onClick={() => setShowAddForm(true)}>
+                + {t('matches.addMatch')}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="m-divider"><span>SCHEDULED MATCHES</span></div>
+              <div className="m-list">
+                {matches.map(match => {
+                  const mapColor  = MAP_COLORS[match.map as MapName] || '#4ade80';
+                  const isEditing = editMatchId === match._id;
+
+                  return (
+                    <div
+                      key={match._id}
+                      className="m-row"
+                      onClick={() => { if (!isEditing) navigate(`/tournaments/${tournamentId}/rounds/${roundId}/matches/${match._id}`); }}
+                    >
+                      <div className="m-row-bar" style={{ background: `linear-gradient(180deg, ${mapColor}, ${mapColor}88)` }} />
+
+                      {!isEditing ? (
+                        <div className="m-row-body">
+                          <div className="m-match-num" style={{ background: mapColor, boxShadow: `0 0 8px ${mapColor}55` }}>
+                            M{match.matchNo}
+                          </div>
+                          <div className="m-map-block">
+                            <div className="m-orb m-map-name" style={{ color: mapColor }}>{match.map}</div>
+                            <div className="m-meta">
+                              <span className="m-time-chip">
+                                <FaClock size={10} />{match.time}
+                              </span>
+                              {match.groups?.map(g => (
+                                <span key={g._id} className="m-group-pill">{g.groupName}</span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="m-row-actions" onClick={e => e.stopPropagation()}>
+                            <button className="m-ic-btn m-ic-edit" onClick={() => startEdit(match)} title="Edit">
+                              <FaEdit color="#fff" size={13} />
+                            </button>
+                            <button className="m-ic-btn m-ic-del" onClick={() => handleDeleteMatch(match._id)} title="Delete">
+                              <FaTrash color="#fff" size={13} />
+                            </button>
+                          </div>
+                          <FaChevronRight className="m-nav-arrow" size={14} />
+                        </div>
+                      ) : (
+                        /* ── Inline edit mode ── */
+                        <div onClick={e => e.stopPropagation()}>
+                          <div className="m-row-body" style={{ paddingBottom: 10 }}>
+                            <div className="m-match-num" style={{ background: mapColor }}>M{match.matchNo}</div>
+                            <span className="m-orb" style={{ fontSize: 11, color: '#4ade80', letterSpacing: 1 }}>EDITING</span>
+                          </div>
+                          <div className="m-edit-form">
+                            <div className="m-edit-grid">
+                              <div>
+                                <p className="m-field-lbl">Match No</p>
+                                <input type="number" min={1} value={editMatchNo}
+                                  onChange={e => setEditMatchNo(parseInt(e.target.value) || 1)}
+                                  className="m-input" />
+                              </div>
+                              <div>
+                                <p className="m-field-lbl">Time</p>
+                                <input type="time" value={editTime}
+                                  onChange={e => setEditTime(e.target.value)}
+                                  className="m-input" />
+                              </div>
+                              <div>
+                                <p className="m-field-lbl">Map</p>
+                                <div className="m-edit-map-row">
+                                  {MAPS.map(map => {
+                                    const color = MAP_COLORS[map];
+                                    return (
+                                      <div
+                                        key={map}
+                                        className={`m-edit-map-chip${editMap === map ? ' emc-sel' : ''}`}
+                                        style={{ '--mc': color } as React.CSSProperties}
+                                        onClick={() => setEditMap(map)}
+                                      >
+                                        {map}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="m-edit-actions">
+                              <button className="m-btn-cancel" onClick={() => setEditMatchId(null)}>Cancel</button>
+                              <button className="m-btn-save" onClick={() => handleUpdateMatch(match._id)}>Save Changes</button>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
-                    <div className="flex gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startEdit(match);
-                        }}
-                        className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600 hover:text-white transition-all"
-                      >
-                        {t('matches.edit')}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteMatch(match._id);
-                        }}
-                        className="px-4 py-2 bg-red-600/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-600 hover:text-white transition-all"
-                      >
-                        {t('matches.delete')}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

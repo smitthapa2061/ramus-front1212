@@ -1,6 +1,6 @@
 import React, { useState, ChangeEvent, FormEvent, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FaEdit, FaTrash, FaDiscord, FaUpload } from "react-icons/fa";
+import { FaEdit, FaTrash, FaDiscord, FaUpload, FaTrophy, FaUsers, FaEye } from "react-icons/fa";
 import { useTranslation } from 'react-i18next';
 import api from "../login/api"; // Axios instance with withCredentials
 import { socket } from "./socket"; // socket instance
@@ -71,7 +71,6 @@ const Dashboard: React.FC = () => {
       return data;
     } catch (err) {
       console.error("Auth check failed:", err);
-      // Clear cache on auth failure
       removeCache(GLOBAL_CACHE_KEY);
       return null;
     }
@@ -89,20 +88,17 @@ const Dashboard: React.FC = () => {
     }
     setUser(userData);
 
-    // Join user room for live updates
     socket.emit('join', userData._id);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const key = `${CACHE_KEY_BASE}_${userData._id}`;
 
-    // Try cache first (10 minutes TTL)
     const cached = getCache(CACHE_KEY_BASE, 1000 * 60 * 10);
     if (cached) {
       setTournaments(cached);
       return;
     }
 
-    // Fetch from API if cache missing or expired
     try {
       const { data } = await api.get<Tournament[]>("/tournaments");
       setTournaments(data);
@@ -118,7 +114,6 @@ const Dashboard: React.FC = () => {
 
     const handleNewTournament = (tournament: Tournament) => {
       setTournaments((prev) => {
-        // avoid duplicates
         if (prev.find((t) => t._id === tournament._id)) return prev;
         const updated = [...prev, tournament];
         setCache(CACHE_KEY_BASE, updated);
@@ -215,319 +210,426 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header/Navigation Bar */}
-      <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700/50 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
-            {/* Logo */}
-            <div className="flex items-center gap-3">
-              <img
-                src="./logo.png"
-                alt="ScoreSync Logo"
-                className="w-[70px] h-[70px] rounded-lg shadow-lg"
-              />
-              <div>
-                <h1 className="text-[1rem] font-bold text-white">{t('dashboard.header.title')}</h1>
-                <h1 className="text-[1rem] font-bold text-white">{t('dashboard.header.subtitle')}</h1>
-              </div>
-            </div>
+ return (
+  <div className="min-h-screen bg-gradient-to-br from-green-900 via-black to-green-900 font-mono">
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&display=swap');
 
-            {/* Navigation Buttons */}
-            <nav className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
-              <button
-                onClick={() => (window.location.href = '/dashboard')}
-                className="bg-purple-600 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                {t('dashboard.nav.tournaments')}
-              </button>
-              <button
-                onClick={() => window.open('/teams', '_blank', 'noopener,noreferrer')}
-                className="bg-slate-700 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
-              >
-                {t('dashboard.nav.teams')}
-              </button>
-              <button
-                onClick={() => window.open('/displayhud', '_blank', 'noopener,noreferrer')}
-                className="bg-slate-700 text-white font-medium text-sm px-5 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
-              >
-                {t('dashboard.nav.hud')}
-              </button>
-            </nav>
+      * { font-family: 'Rajdhani', sans-serif; }
+      .orbitron { font-family: 'Orbitron', monospace; }
 
-            {/* User Info */}
-            <div className="flex items-center gap-2 md:gap-4">
-              {user && (
-                <span className="text-sm text-gray-300 font-medium">
-                  {t('dashboard.header.admin')}<span className="text-white">{user.username}</span>
-                </span>
+      .sidebar-btn {
+        display: flex; flex-direction: column; align-items: center;
+        color: #6b7280; cursor: pointer;
+        padding: 10px; border-radius: 12px; width: 64px;
+        border: 1px solid transparent; background: transparent;
+        text-decoration: none;
+      }
+      .sidebar-btn:hover {
+        color: #4ade80;
+        background: rgba(74,222,128,0.08);
+        border-color: rgba(74,222,128,0.3);
+        box-shadow: 0 0 16px rgba(74,222,128,0.25), inset 0 0 8px rgba(74,222,128,0.05);
+      }
+      .sidebar-btn.active {
+        color: #4ade80;
+        background: rgba(74,222,128,0.12);
+        border-color: rgba(74,222,128,0.5);
+        box-shadow: 0 0 20px rgba(74,222,128,0.3);
+      }
+
+      .card-hover {
+        cursor: pointer;
+      }
+      .card-hover:hover {
+        box-shadow:
+          0 0 30px rgba(74,222,128,0.3),
+          0 0 60px rgba(74,222,128,0.12),
+          0 20px 40px rgba(0,0,0,0.5);
+      }
+
+      .glass {
+        background: rgba(255,255,255,0.04);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(74,222,128,0.2);
+      }
+
+      .glass-dark {
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(74,222,128,0.3);
+      }
+
+      .neon-border {
+        border: 1px solid rgba(74,222,128,0.4);
+        box-shadow: 0 0 10px rgba(74,222,128,0.15), inset 0 0 10px rgba(74,222,128,0.05);
+      }
+
+      .card-actions { opacity: 0; }
+      .card-hover:hover .card-actions { opacity: 1; }
+
+      .input-cyber {
+        width: 100%;
+        padding: 12px 16px;
+        background: rgba(0,0,0,0.6);
+        border: 1px solid rgba(74,222,128,0.3);
+        border-radius: 8px;
+        color: #fff;
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 15px;
+        letter-spacing: 0.5px;
+        outline: none;
+      }
+      .input-cyber::placeholder { color: rgba(156,163,175,0.6); }
+      .input-cyber:focus {
+        border-color: rgba(74,222,128,0.8);
+        box-shadow: 0 0 0 3px rgba(74,222,128,0.15), 0 0 15px rgba(74,222,128,0.2);
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #16a34a, #15803d);
+        color: #fff; border: 1px solid rgba(74,222,128,0.5);
+        font-family: 'Orbitron', monospace; font-size: 12px;
+        letter-spacing: 1px; padding: 10px 20px; border-radius: 8px;
+        cursor: pointer; font-weight: 600;
+      }
+      .btn-primary:hover {
+        background: linear-gradient(135deg, #15803d, #166534);
+        box-shadow: 0 0 20px rgba(74,222,128,0.4);
+      }
+
+      .btn-ghost {
+        background: rgba(0,0,0,0.5);
+        color: #9ca3af; border: 1px solid rgba(74,222,128,0.2);
+        font-family: 'Rajdhani', sans-serif; font-size: 14px;
+        padding: 10px 20px; border-radius: 8px;
+        cursor: pointer; font-weight: 600;
+      }
+      .btn-ghost:hover {
+        background: rgba(74,222,128,0.08);
+        color: #4ade80;
+        border-color: rgba(74,222,128,0.4);
+      }
+
+      .scan-line {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        pointer-events: none; z-index: 999; opacity: 0.025;
+        background: repeating-linear-gradient(
+          0deg, transparent, transparent 2px,
+          rgba(74,222,128,0.4) 2px, rgba(74,222,128,0.4) 4px
+        );
+      }
+
+      .hex-bg {
+        position: fixed; inset: 0; pointer-events: none;
+        background-image: radial-gradient(circle, rgba(74,222,128,0.06) 1px, transparent 1px);
+        background-size: 40px 40px; z-index: 0;
+      }
+
+      .color-swatch {
+        width: 32px; height: 32px; border-radius: 6px;
+        border: 1px solid rgba(255,255,255,0.15);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      }
+
+      .logo-mark {
+        box-shadow: 0 0 5px rgba(74,222,128,0.2);
+      }
+
+      .tag {
+        display: inline-block;
+        background: rgba(74,222,128,0.1);
+        border: 1px solid rgba(74,222,128,0.25);
+        color: #4ade80; font-size: 11px;
+        padding: 2px 8px; border-radius: 4px;
+        font-family: 'Orbitron', monospace;
+        letter-spacing: 0.5px;
+      }
+    `}</style>
+
+    {/* Ambient effects */}
+    <div className="scan-line" />
+    <div className="hex-bg" />
+    <div className="fixed inset-0 pointer-events-none z-0"
+      style={{ background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74,222,128,0.12), transparent)' }} />
+
+    {/* ── LEFT SIDEBAR ── */}
+    <div className="fixed left-0 top-0 h-full w-[78px] z-50 flex flex-col items-center py-6 gap-2"
+      style={{
+        background: 'rgba(0,0,0,0.85)',
+        borderRight: '1px solid rgba(74,222,128,0.25)',
+        backdropFilter: 'blur(24px)',
+        boxShadow: '4px 0 24px rgba(0,0,0,0.6), inset -1px 0 0 rgba(74,222,128,0.1)'
+      }}>
+      {/* Logo mark */}
+      <div className="w-10 h-10 rounded-xl logo-mark mb-2 flex items-center justify-center"
+       style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)' }}>
+        <img src="./file.jpg" alt="logo" className="w-9 h-9 object-contain rounded" />
+      </div>
+
+      {/* User badge */}
+      {user && (
+        <div style={{
+          width: 48, padding: '4px 0', borderRadius: 8,
+          background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.2)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, marginBottom: 4
+        }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80' }} />
+          <span style={{ fontSize: 9, color: '#4ade80', letterSpacing: '0.5px', fontWeight: 700,
+            maxWidth: 44, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            textAlign: 'center', padding: '0 4px' }}>
+            {user.username}
+          </span>
+        </div>
+      )}
+
+      <div style={{ width: '40px', height: '1px', background: 'rgba(74,222,128,0.2)', margin: '4px 0 8px' }} />
+
+      <button className="sidebar-btn active" onClick={() => (window.location.href = '/dashboard')}>
+        <FaTrophy size={20} />
+        <span style={{ fontSize: '10px', marginTop: '4px', letterSpacing: '0.5px', fontWeight: 600 }}>TOUR</span>
+      </button>
+      <button className="sidebar-btn" onClick={() => window.open('/teams', '_blank', 'noopener,noreferrer')}>
+        <FaUsers size={20} />
+        <span style={{ fontSize: '10px', marginTop: '4px', letterSpacing: '0.5px', fontWeight: 600 }}>TEAMS</span>
+      </button>
+      <button className="sidebar-btn" onClick={() => window.open('/displayhud', '_blank', 'noopener,noreferrer')}>
+        <FaEye size={20} />
+        <span style={{ fontSize: '10px', marginTop: '4px', letterSpacing: '0.5px', fontWeight: 600 }}>HUD</span>
+      </button>
+
+      <div style={{ flex: 1 }} />
+
+      <button className="sidebar-btn" onClick={() => window.open('https://discord.com/channels/623776491682922526/1426117227257663558', '_blank')}>
+        <FaDiscord size={20} />
+        <span style={{ fontSize: '10px', marginTop: '4px', letterSpacing: '0.5px', fontWeight: 600 }}>HELP</span>
+      </button>
+    </div>
+
+    {/* ── MAIN ── */}
+    <main style={{
+      marginLeft: '78px',
+      padding: '32px 32px 32px 32px',
+      position: 'relative',
+      zIndex: 1,
+      maxWidth: '1360px'
+    }}>
+      {/* Page header */}
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <span className="tag">DASHBOARD</span>
+        </div>
+        <h2 className="orbitron font-black text-white mb-1" style={{ fontSize: '28px', letterSpacing: '1px' }}>
+          {t('dashboard.page.title')}
+        </h2>
+        <p style={{ color: '#6b7280', fontSize: '14px', letterSpacing: '0.3px' }}>{t('dashboard.page.subtitle')}</p>
+      </div>
+
+      {/* Add button */}
+      <button className="btn-primary mb-8" style={{ padding: '12px 28px', fontSize: '13px' }}
+        onClick={() => setShowForm(!showForm)}>
+        + {t('dashboard.page.addTournament')}
+      </button>
+
+      {/* ── CREATE FORM ── */}
+      {showForm && (
+        <div className="glass-dark neon-border rounded-2xl p-6 mb-8" style={{ maxWidth: '560px' }}>
+          <div className="flex items-center gap-2 mb-5">
+            <span className="tag">NEW</span>
+            <h3 className="orbitron text-white font-bold" style={{ fontSize: '16px' }}>
+              {t('dashboard.page.create.title')}
+            </h3>
+          </div>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <input type="text" name="tournamentName" placeholder={t('dashboard.page.create.name')}
+              value={form.tournamentName} onChange={handleChange} className="input-cyber" />
+            <div>
+              <label htmlFor="tournament-logo-upload" className="input-cyber flex items-center gap-2"
+                style={{ cursor: 'pointer', display: 'flex' }}>
+                <FaUpload size={14} style={{ color: '#4ade80' }} />
+                <span>{t('dashboard.page.create.logo')}</span>
+              </label>
+              <input id="tournament-logo-upload" type="file" accept="image/*"
+                onChange={handleTorLogoUpload} style={{ display: 'none' }} />
+              {form.torLogo && (
+                <img src={form.torLogo} alt="Preview"
+                  className="w-20 h-20 object-contain mt-2 rounded-lg"
+                  style={{ border: '1px solid rgba(74,222,128,0.4)' }}
+                  loading="lazy" onError={(e) => e.currentTarget.src = './logo.png'} />
               )}
-              <div className="flex items-center gap-2 text-sm text-gray-300">
-                <span>{t('dashboard.header.help')}</span>
-                <FaDiscord
-                  className="cursor-pointer text-2xl text-gray-300 hover:text-purple-400 transition-colors"
-                  onClick={() => window.open('https://discord.com/channels/623776491682922526/1426117227257663558', '_blank')}
-                />
-              </div>
             </div>
-          </div>
+            {[
+              { name: "primaryColor", placeholder: t('dashboard.page.create.primaryColor') },
+              { name: "secondaryColor", placeholder: t('dashboard.page.create.secondaryColor') },
+              { name: "overlayBg", placeholder: t('dashboard.page.create.overlayBg') },
+            ].map((field) => (
+              <input key={field.name} type="text" name={field.name}
+                placeholder={field.placeholder} value={(form as any)[field.name]}
+                onChange={handleChange} className="input-cyber" />
+            ))}
+            <div className="flex gap-3 pt-1">
+              <button type="submit" className="btn-primary">{t('dashboard.page.create.button')}</button>
+              <button type="button" className="btn-ghost" onClick={() => setShowForm(false)}>
+                {t('dashboard.page.create.cancel')}
+              </button>
+            </div>
+          </form>
         </div>
-      </header>
+      )}
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Page Header */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">{t('dashboard.page.title')}</h2>
-          <p className="text-gray-400">{t('dashboard.page.subtitle')}</p>
-        </div>
+      {/* ── TOURNAMENT CARDS ── */}
+      {tournaments.length > 0 ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+          {tournaments.map((t) => (
+            <div key={t._id} className="card-hover glass rounded-2xl relative overflow-hidden"
+              style={{ padding: '0' }}>
+              {/* Card top accent bar */}
+              <div style={{
+                height: '3px',
+                background: `linear-gradient(90deg, ${t.primaryColor || '#4ade80'}, ${t.secondaryColor || '#166534'}, transparent)`
+              }} />
 
-        {/* Add Tournament Button */}
-        <button
-          className="bg-purple-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors mb-6 shadow-lg"
-          onClick={() => setShowForm(!showForm)}
-        >
-          {t('dashboard.page.addTournament')}
-        </button>
-
-        {/* --- Create Form --- */}
-        {showForm && (
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 mb-8 shadow-xl max-w-2xl">
-            <h3 className="text-xl font-bold text-white mb-4">{t('dashboard.page.create.title')}</h3>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <input
-                  type="text"
-                  name="tournamentName"
-                  placeholder={t('dashboard.page.create.name')}
-                  value={form.tournamentName}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                />
-              </div>
-              <div>
-                <label htmlFor="tournament-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
-                  <FaUpload size={16} />
-                  {t('dashboard.page.create.logo')}
-                </label>
-                <input
-                  id="tournament-logo-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleTorLogoUpload}
-                  className="hidden"
-                />
-                {form.torLogo && (
-                  <img
-                    src={form.torLogo}
-                    alt="Tournament Logo Preview"
-                    className="w-24 h-24 object-contain my-2 rounded-lg border border-slate-600"
-                    loading="lazy"
-                    onError={(e) => e.currentTarget.src = './logo.png'}
-                  />
-                )}
-              </div>
-              {[
-                { name: "primaryColor", placeholder: t('dashboard.page.create.primaryColor') },
-                { name: "secondaryColor", placeholder: t('dashboard.page.create.secondaryColor') },
-                { name: "overlayBg", placeholder: t('dashboard.page.create.overlayBg') },
-              ].map((field) => (
-                <div key={field.name}>
-                  <input
-                    type="text"
-                    name={field.name}
-                    placeholder={field.placeholder}
-                    value={(form as any)[field.name]}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                  />
-                </div>
-              ))}
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  className="bg-purple-600 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  {t('dashboard.page.create.button')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  className="bg-slate-700 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
-                >
-                  {t('dashboard.page.create.cancel')}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* --- Tournament List --- */}
-        {tournaments.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {tournaments.map((t) => (
-              <div
-                key={t._id}
-                className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow relative group"
-              >
-                {/* Action Buttons */}
-                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => handleEdit(t._id)}
-                    className="p-2 bg-blue-600/80 rounded-lg hover:bg-blue-600 transition-colors"
-                    title="Edit"
-                  >
-                    <FaEdit className="text-white" size={18} />
+              <div style={{ padding: '20px' }}>
+                {/* Action buttons */}
+                <div className="card-actions absolute top-8 right-4 flex gap-2">
+                  <button onClick={() => handleEdit(t._id)}
+                    style={{ padding: '7px', background: 'rgba(37,99,235,0.85)', borderRadius: '8px', border: 'none', cursor: 'pointer', backdropFilter: 'blur(8px)' }}
+                    onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 0 12px rgba(59,130,246,0.6)')}
+                    onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}>
+                    <FaEdit style={{ color: '#fff' }} size={15} />
                   </button>
-                  <button
-                    onClick={() => handleDelete(t._id)}
-                    className="p-2 bg-red-600/80 rounded-lg hover:bg-red-600 transition-colors"
-                    title="Delete"
-                  >
-                    <FaTrash className="text-white" size={18} />
+                  <button onClick={() => handleDelete(t._id)}
+                    style={{ padding: '7px', background: 'rgba(220,38,38,0.85)', borderRadius: '8px', border: 'none', cursor: 'pointer', backdropFilter: 'blur(8px)' }}
+                    onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 0 12px rgba(239,68,68,0.6)')}
+                    onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}>
+                    <FaTrash style={{ color: '#fff' }} size={15} />
                   </button>
                 </div>
 
-                {/* Tournament Content */}
-                <Link to={`/tournaments/${t._id}/rounds`} className="block">
-                  <div className="mb-4">
-                    {t.torLogo && (
-                      <img
-                        src={t.torLogo}
-                        alt={t.tournamentName}
-                        className="w-16 h-16 rounded-lg object-cover mb-3"
-                      />
+                <Link to={`/tournaments/${t._id}/rounds`} style={{ textDecoration: 'none', display: 'block' }}>
+                  <div className="flex items-center gap-3 mb-4">
+                    {t.torLogo ? (
+                      <img src={t.torLogo} alt={t.tournamentName}
+                        style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', border: `1px solid ${t.primaryColor || 'rgba(74,222,128,0.3)'}`, flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: 52, height: 52, borderRadius: 10, background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <FaTrophy size={22} style={{ color: '#4ade80', opacity: 0.6 }} />
+                      </div>
                     )}
-                    <h3
-                      className="text-xl font-bold mb-2 hover:underline"
-                      style={{ color: t.primaryColor || '#ffffff' }}
-                    >
-                      {t.tournamentName}
-                    </h3>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <h3 className="orbitron font-bold truncate"
+                        style={{ color: t.primaryColor || '#ffffff', fontSize: '15px', letterSpacing: '0.5px' }}>
+                        {t.tournamentName}
+                      </h3>
+                    </div>
                   </div>
 
-                  {/* Color Preview */}
-                  <div className="flex gap-2 mt-4">
-                    <div
-                      className="w-8 h-8 rounded border border-slate-600"
-                      style={{ backgroundColor: t.primaryColor }}
-                      title="Primary Color"
-                    />
-                    <div
-                      className="w-8 h-8 rounded border border-slate-600"
-                      style={{ backgroundColor: t.secondaryColor }}
-                      title="Secondary Color"
-                    />
+                  {/* Color swatches */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <span style={{ fontSize: 11, color: '#6b7280', marginRight: 4, letterSpacing: '0.5px' }}>COLORS</span>
+                    {t.primaryColor && (
+                      <div className="color-swatch" style={{ background: t.primaryColor }} title="Primary" />
+                    )}
+                    {t.secondaryColor && (
+                      <div className="color-swatch" style={{ background: t.secondaryColor }} title="Secondary" />
+                    )}
+                    {t.overlayBg && (
+                      <div className="color-swatch" style={{ background: t.overlayBg }} title="Overlay BG" />
+                    )}
+                    <div style={{ flex: 1 }} />
+                    <span style={{ fontSize: 11, color: '#4ade80', opacity: 0.6 }}>VIEW →</span>
                   </div>
                 </Link>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-16">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-800/50 mb-4">
-              <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
             </div>
-            <h3 className="text-xl font-semibold text-gray-400 mb-2">{t('dashboard.page.empty.title')}</h3>
-            <p className="text-gray-500 mb-6">{t('dashboard.page.empty.desc')}</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="bg-purple-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              {t('dashboard.page.empty.button')}
-            </button>
+          ))}
+        </div>
+      ) : (
+        /* ── EMPTY STATE ── */
+        <div style={{ textAlign: 'center', padding: '64px 24px' }}>
+          <div style={{
+            width: 72, height: 72, borderRadius: '50%', margin: '0 auto 20px',
+            background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 24px rgba(74,222,128,0.15)'
+          }}>
+            <FaTrophy size={30} style={{ color: '#4ade80', opacity: 0.7 }} />
           </div>
-        )}
-      </main>
-
-      {/* --- Edit Modal --- */}
-      {showEditModal && editingTournament && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-xl p-6 shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-bold text-white mb-4">{t('dashboard.page.edit.title')}</h3>
-            <form onSubmit={handleEditSubmit} className="space-y-4">
-              <div>
-                <input
-                  type="text"
-                  name="tournamentName"
-                  value={editForm.tournamentName || ""}
-                  onChange={handleEditChange}
-                  placeholder={t('dashboard.page.edit.name')}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-tournament-logo-upload" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
-                  <FaUpload size={16} />
-                  {t('dashboard.page.edit.logo')}
-                </label>
-                <input
-                  id="edit-tournament-logo-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    try {
-                      const url = await uploadToCloudinary(file, "tournaments/logos", "team_logo");
-                      setEditForm((prev) => ({ ...prev, torLogo: url }));
-                    } catch (err) {
-                      alert("Upload failed");
-                    }
-                  }}
-                  className="hidden"
-                />
-                {editForm.torLogo && (
-                  <img
-                    src={editForm.torLogo}
-                    alt="Tournament Logo Preview"
-                    className="w-24 h-24 object-contain my-2 rounded-lg border border-slate-600"
-                    loading="lazy"
-                    onError={(e) => e.currentTarget.src = './logo.png'}
-                  />
-                )}
-              </div>
-              {["primaryColor", "secondaryColor", "overlayBg"].map(
-                (field) => (
-                  <div key={field}>
-                    <input
-                      type="text"
-                      name={field}
-                      value={(editForm as any)[field] || ""}
-                      onChange={handleEditChange}
-                      placeholder={t(`dashboard.page.edit.${field}`)}
-                      className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    />
-                  </div>
-                )
-              )}
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  className="bg-green-600 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  Save Changes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingTournament(null);
-                    setShowEditModal(false);
-                  }}
-                  className="bg-slate-700 text-white font-medium px-6 py-2.5 rounded-lg hover:bg-slate-600 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
+          <h3 className="orbitron font-bold text-white mb-2" style={{ fontSize: '18px' }}>
+            {t('dashboard.page.empty.title')}
+          </h3>
+          <p style={{ color: '#6b7280', marginBottom: 24, fontSize: '14px' }}>{t('dashboard.page.empty.desc')}</p>
+          <button className="btn-primary" style={{ padding: '12px 32px' }} onClick={() => setShowForm(true)}>
+            + {t('dashboard.page.empty.button')}
+          </button>
         </div>
       )}
-    </div>
-  );
+    </main>
+
+    {/* ── EDIT MODAL ── */}
+    {showEditModal && editingTournament && (
+      <div style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+        backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', zIndex: 100, padding: '16px'
+      }}>
+        <div className="glass-dark rounded-2xl"
+          style={{ width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto', padding: '28px',
+            boxShadow: '0 0 60px rgba(74,222,128,0.15), 0 40px 80px rgba(0,0,0,0.6)' }}>
+          <div className="flex items-center gap-2 mb-5">
+            <span className="tag">EDIT</span>
+            <h3 className="orbitron text-white font-bold" style={{ fontSize: '16px' }}>
+              {t('dashboard.page.edit.title')}
+            </h3>
+          </div>
+          <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <input type="text" name="tournamentName" value={editForm.tournamentName || ""}
+              onChange={handleEditChange} placeholder={t('dashboard.page.edit.name')} className="input-cyber" />
+            <div>
+              <label htmlFor="edit-tournament-logo-upload" className="input-cyber flex items-center gap-2"
+                style={{ cursor: 'pointer', display: 'flex' }}>
+                <FaUpload size={14} style={{ color: '#4ade80' }} />
+                <span>{t('dashboard.page.edit.logo')}</span>
+              </label>
+              <input id="edit-tournament-logo-upload" type="file" accept="image/*"
+                style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const url = await uploadToCloudinary(file, "tournaments/logos", "team_logo");
+                    setEditForm((prev) => ({ ...prev, torLogo: url }));
+                  } catch { alert("Upload failed"); }
+                }} />
+              {editForm.torLogo && (
+                <img src={editForm.torLogo} alt="Preview"
+                  className="w-20 h-20 object-contain mt-2 rounded-lg"
+                  style={{ border: '1px solid rgba(74,222,128,0.4)' }}
+                  loading="lazy" onError={(e) => e.currentTarget.src = './logo.png'} />
+              )}
+            </div>
+            {["primaryColor", "secondaryColor", "overlayBg"].map((field) => (
+              <input key={field} type="text" name={field}
+                value={(editForm as any)[field] || ""}
+                onChange={handleEditChange}
+                placeholder={t(`dashboard.page.edit.${field}`)}
+                className="input-cyber" />
+            ))}
+            <div className="flex gap-3 pt-1">
+              <button type="submit" className="btn-primary">Save Changes</button>
+              <button type="button" className="btn-ghost"
+                onClick={() => { setEditingTournament(null); setShowEditModal(false); }}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+  </div>
+);
 };
 
 export default Dashboard;

@@ -2,21 +2,18 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import api from '../login/api';
-import { socket } from "./socket"; // shared socket
+import { socket } from "./socket";
 import SocketManager from './socketManager';
 import { requestQueue, UpdateBatcher } from './requestQueue';
 import { uploadToCloudinary } from '../utils/cloudinaryUpload';
-import { FaUpload } from 'react-icons/fa';
+import { FaUpload, FaEdit, FaTimes, FaPlus, FaCheck } from 'react-icons/fa';
 
-// Retry utility with exponential backoff
 const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, baseDelay = 1000) => {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: any) {
+    try { return await fn(); }
+    catch (error: any) {
       if ((error.response?.status === 429 || error.response?.status === 500) && attempt < maxRetries - 1) {
-        const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, attempt) + Math.random() * 1000));
         continue;
       }
       throw error;
@@ -24,845 +21,787 @@ const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, baseDela
   }
 };
 
-
-
 interface Player {
-  _id: string;
-  playerName: string;
-  killNum: number;
-  bHasDied: boolean;
-  damage?: number;
-  survivalTime?: number;
-  assists?: number;
-  [key: string]: any; // optional for unknown fields
+  _id: string; playerName: string; killNum: number;
+  bHasDied: boolean; damage?: number; survivalTime?: number; assists?: number;
+  [key: string]: any;
 }
-
 interface Team {
-  _id: string;
-  teamId?: string;
-  teamName: string;
-  teamTag?: string;
-  slot?: number;
-  placePoints: number;
-  players: Player[];
-  [key: string]: any;
+  _id: string; teamId?: string; teamName: string; teamTag?: string;
+  slot?: number; placePoints: number; players: Player[]; [key: string]: any;
 }
+interface MatchData { _id: string; teams: Team[]; [key: string]: any; }
 
-interface MatchData {
-  _id: string;
-  teams: Team[];
-  [key: string]: any;
-}
+// ── Styles ─────────────────────────────────────────────────────────────────────
+const STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
 
+  .md-root { font-family: 'Rajdhani', sans-serif; }
+  .md-root *, .md-root *::before, .md-root *::after { box-sizing: border-box; }
+  .md-orb  { font-family: 'Orbitron', monospace !important; }
+  .md-bar  { font-family: 'Barlow Condensed', sans-serif !important; }
 
+  /* ── Page ── */
+  .md-page {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #052e16 0%, #000 50%, #052e16 100%);
+    color: #fff;
+  }
+  .md-hex {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: radial-gradient(circle, rgba(74,222,128,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .md-scan {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.018;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(74,222,128,0.6) 2px, rgba(74,222,128,0.6) 4px);
+  }
+  .md-glow {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background: radial-gradient(ellipse 80% 40% at 50% -5%, rgba(74,222,128,0.08), transparent);
+  }
 
+  /* ── Sticky top bar ── */
+  .md-topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(0,4,1,0.92);
+    border-bottom: 1px solid rgba(74,222,128,0.18);
+    backdrop-filter: blur(20px);
+  }
+
+  /* ── Live stat pills ── */
+  .md-live-row {
+    display: flex; justify-content: center; align-items: center; gap: 24px;
+    padding: 14px 24px;
+    border-bottom: 1px solid rgba(74,222,128,0.1);
+  }
+  .md-live-pill {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(74,222,128,0.2);
+    border-radius: 10px; padding: 10px 22px;
+  }
+  .md-live-pill-lbl {
+    font-family: 'Orbitron', monospace; font-size: 9px; font-weight: 700;
+    color: #4b5563; letter-spacing: 2px; text-transform: uppercase;
+  }
+  .md-live-pill-val {
+    font-family: 'Orbitron', monospace; font-size: 28px; font-weight: 900; color: #fff;
+    line-height: 1;
+  }
+  .md-live-pill-val.green { color: #4ade80; text-shadow: 0 0 12px rgba(74,222,128,0.5); }
+  .md-live-dot { width: 1px; height: 40px; background: rgba(74,222,128,0.15); }
+
+  /* ── Slot nav ── */
+  .md-slot-nav {
+    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+    padding: 10px 20px;
+  }
+  .md-slot-btn {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    padding: 5px 12px; border-radius: 6px; border: 1px solid rgba(74,222,128,0.2);
+    background: rgba(0,0,0,0.4); color: #6b7280; cursor: pointer; letter-spacing: 0.5px;
+  }
+  .md-slot-btn:hover { background: rgba(74,222,128,0.07); color: #4ade80; border-color: rgba(74,222,128,0.4); }
+  .md-slot-btn.dead { background: rgba(220,38,38,0.08); color: #ef4444; border-color: rgba(220,38,38,0.25); }
+  .md-slot-btn.highlighted { border-color: #4ade80; background: rgba(74,222,128,0.12); color: #4ade80; box-shadow: 0 0 10px rgba(74,222,128,0.25); }
+
+  /* ── Sort bar ── */
+  .md-sort-bar {
+    display: flex; justify-content: flex-end; align-items: center; gap: 10px;
+    padding: 16px 24px 8px; position: relative; z-index: 1;
+  }
+  .md-sort-lbl { font-family: 'Orbitron', monospace; font-size: 9px; color: #374151; letter-spacing: 1.5px; }
+  .md-sort-select {
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(74,222,128,0.2);
+    border-radius: 7px; color: #4ade80; padding: 6px 12px;
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    outline: none; cursor: pointer;
+  }
+  .md-sort-select option { background: #010a03; }
+
+  /* ── Teams grid ── */
+  .md-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px; padding: 0 20px 40px; position: relative; z-index: 1;
+  }
+
+  /* ── Team card ── */
+  .md-card {
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(74,222,128,0.12);
+    border-radius: 14px; overflow: hidden;
+    position: relative;
+  }
+  .md-card:hover { border-color: rgba(74,222,128,0.32); box-shadow: 0 0 20px rgba(74,222,128,0.06); }
+  .md-card.eliminated { border-color: rgba(220,38,38,0.25); }
+  .md-card.highlighted { border-color: #4ade80; box-shadow: 0 0 24px rgba(74,222,128,0.2); }
+
+  /* Top color bar */
+  .md-card-topbar { height: 3px; background: linear-gradient(90deg, #4ade80, #166534, transparent); }
+  .md-card.eliminated .md-card-topbar { background: linear-gradient(90deg, #ef4444, #7f1d1d, transparent); }
+
+  /* Card header */
+  .md-card-hdr {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid rgba(74,222,128,0.08);
+  }
+  .md-card-hdr-l { display: flex; align-items: center; gap: 10px; }
+
+  .md-slot-badge {
+    font-family: 'Orbitron', monospace; font-size: 11px; font-weight: 900;
+    background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.3);
+    color: #4ade80; border-radius: 6px; padding: 4px 10px; flex-shrink: 0;
+  }
+  .md-card.eliminated .md-slot-badge { background: rgba(220,38,38,0.1); border-color: rgba(220,38,38,0.3); color: #ef4444; }
+
+  .md-team-name {
+    font-family: 'Orbitron', monospace; font-size: 13px; font-weight: 900;
+    color: #fff; letter-spacing: 0.3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;
+  }
+  .md-team-tag { font-size: 11px; color: #6b7280; font-weight: 600; margin-top: 1px; }
+
+  .md-card-hdr-r { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+  /* Elim toggle */
+  .md-elim-toggle {
+    display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+  }
+  .md-elim-lbl { font-family: 'Orbitron', monospace; font-size: 8px; letter-spacing: 1px; color: #374151; }
+  .md-card.eliminated .md-elim-lbl { color: #ef4444; }
+
+  .md-toggle-track {
+    width: 36px; height: 20px; border-radius: 10px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
+    position: relative; cursor: pointer;
+  }
+  .md-toggle-track.on { background: #dc2626; border-color: rgba(220,38,38,0.5); box-shadow: 0 0 8px rgba(220,38,38,0.35); }
+  .md-toggle-thumb {
+    position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%; background: #6b7280;
+  }
+  .md-toggle-track.on .md-toggle-thumb { left: 18px; background: #fff; }
+
+  .md-edit-roster-btn {
+    font-family: 'Orbitron', monospace; font-size: 8px; font-weight: 700; letter-spacing: 0.5px;
+    background: rgba(37,99,235,0.12); border: 1px solid rgba(37,99,235,0.3);
+    color: #60a5fa; border-radius: 5px; padding: 4px 10px; cursor: pointer;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .md-edit-roster-btn:hover { background: rgba(37,99,235,0.22); border-color: rgba(37,99,235,0.5); }
+
+  /* ── Points row ── */
+  .md-points-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; background: rgba(0,0,0,0.3);
+    border-bottom: 1px solid rgba(74,222,128,0.06);
+  }
+  .md-pts-group { display: flex; align-items: center; gap: 8px; }
+  .md-pts-lbl { font-size: 10px; color: #4b5563; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 600; }
+  .md-pts-input {
+    width: 52px; padding: 5px 8px; text-align: center;
+    background: rgba(0,0,0,0.6); border: 1px solid rgba(74,222,128,0.25);
+    border-radius: 6px; color: #4ade80;
+    font-family: 'Orbitron', monospace; font-size: 14px; font-weight: 900; outline: none;
+  }
+  .md-pts-input:focus { border-color: rgba(74,222,128,0.7); box-shadow: 0 0 0 2px rgba(74,222,128,0.1); }
+
+  .md-totals { display: flex; align-items: center; gap: 12px; }
+  .md-total-item { display: flex; flex-direction: column; align-items: flex-end; }
+  .md-total-lbl { font-size: 9px; color: #374151; letter-spacing: 0.5px; text-transform: uppercase; }
+  .md-total-val { font-family: 'Orbitron', monospace; font-size: 16px; font-weight: 900; }
+  .md-total-val.kills { color: #f59e0b; }
+  .md-total-val.total { color: #4ade80; }
+  .md-total-divider { width: 1px; height: 28px; background: rgba(74,222,128,0.1); }
+
+  /* ── Player rows ── */
+  .md-players { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 5px; }
+
+  .md-player-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 8px;
+    background: rgba(74,222,128,0.04); border: 1px solid rgba(74,222,128,0.1);
+  }
+  .md-player-row.dead { background: rgba(220,38,38,0.05); border-color: rgba(220,38,38,0.15); }
+
+  .md-player-name {
+    flex: 1; font-size: 14px; font-weight: 600; color: #d1d5db;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.3px;
+  }
+  .md-player-row.dead .md-player-name { color: #4b5563; text-decoration: line-through; }
+
+  /* Kill counter */
+  .md-kill-group { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .md-kill-btn {
+    width: 24px; height: 24px; border-radius: 5px; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; line-height: 1;
+  }
+  .md-kill-btn.minus {
+    background: rgba(220,38,38,0.1); border: 1px solid rgba(220,38,38,0.2); color: #ef4444;
+  }
+  .md-kill-btn.minus:hover { background: rgba(220,38,38,0.25); }
+  .md-kill-btn.plus {
+    background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.2); color: #4ade80;
+  }
+  .md-kill-btn.plus:hover { background: rgba(74,222,128,0.25); }
+  .md-kill-val {
+    font-family: 'Orbitron', monospace; font-size: 13px; font-weight: 900;
+    color: #f59e0b; min-width: 22px; text-align: center;
+  }
+
+  /* Death toggle per player */
+  .md-death-toggle {
+    width: 42px; height: 22px; border-radius: 11px; cursor: pointer; flex-shrink: 0;
+    background: rgba(74,222,128,0.15); border: 1px solid rgba(74,222,128,0.3);
+    position: relative;
+  }
+  .md-death-toggle.dead { background: rgba(220,38,38,0.25); border-color: rgba(220,38,38,0.4); box-shadow: 0 0 6px rgba(220,38,38,0.2); }
+  .md-death-thumb {
+    position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%; background: #4ade80;
+  }
+  .md-death-toggle.dead .md-death-thumb { left: 22px; background: #ef4444; }
+  .md-death-lbl {
+    position: absolute; font-family: 'Orbitron', monospace; font-size: 7px; font-weight: 900;
+    top: 50%; transform: translateY(-50%); letter-spacing: 0.3px;
+  }
+  .md-death-lbl.alive { right: 4px; color: rgba(74,222,128,0.8); }
+  .md-death-lbl.dead  { left: 4px;  color: rgba(239,68,68,0.8); }
+
+  /* ── Loading / Error ── */
+  .md-center {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #052e16 0%, #000 50%, #052e16 100%);
+    flex-direction: column; gap: 16px;
+  }
+  .md-spinner { width: 48px; height: 48px; border: 3px solid rgba(74,222,128,0.12); border-top-color: #4ade80; border-radius: 50%; animation: mdspin 1s linear infinite; }
+  @keyframes mdspin { to { transform: rotate(360deg); } }
+  .md-spin-txt { font-family: 'Orbitron', monospace; font-size: 11px; color: #4ade80; letter-spacing: 2px; }
+
+  /* ── Roster modal ── */
+  .md-modal-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,4,1,0.9); backdrop-filter: blur(16px);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .md-modal {
+    background: #010a03; border: 1px solid rgba(74,222,128,0.25);
+    border-radius: 18px; width: 100%; max-width: 900px; max-height: 92vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 0 60px rgba(74,222,128,0.08), 0 40px 80px rgba(0,0,0,0.8);
+  }
+  .md-modal-hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 28px; border-bottom: 1px solid rgba(74,222,128,0.12);
+    background: rgba(0,0,0,0.5); flex-shrink: 0;
+  }
+  .md-modal-hdr-l { display: flex; align-items: center; gap: 10px; }
+  .md-modal-tag {
+    font-family: 'Orbitron', monospace; font-size: 9px; font-weight: 700;
+    letter-spacing: 2px; color: #4ade80;
+    background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.25);
+    padding: 3px 9px; border-radius: 4px;
+  }
+  .md-modal-title { font-family: 'Orbitron', monospace; font-size: 15px; font-weight: 900; color: #fff; letter-spacing: 0.5px; }
+  .md-modal-team { font-size: 13px; color: #4ade80; font-weight: 600; margin-top: 1px; }
+  .md-modal-close {
+    width: 30px; height: 30px; border-radius: 7px; cursor: pointer;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    color: #6b7280; display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .md-modal-close:hover { background: rgba(220,38,38,0.12); color: #f87171; border-color: rgba(220,38,38,0.3); }
+
+  .md-modal-body {
+    flex: 1; overflow-y: auto; display: grid; grid-template-columns: 1fr 1px 1fr; gap: 0;
+  }
+  .md-modal-body::-webkit-scrollbar { width: 4px; }
+  .md-modal-body::-webkit-scrollbar-thumb { background: rgba(74,222,128,0.15); border-radius: 4px; }
+
+  .md-modal-col { padding: 24px; overflow-y: auto; }
+  .md-modal-divider { background: rgba(74,222,128,0.1); }
+
+  .md-modal-col-title {
+    font-family: 'Orbitron', monospace; font-size: 9px; font-weight: 700;
+    letter-spacing: 2px; color: #4ade80; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .md-modal-col-title::before { content: ''; width: 3px; height: 12px; background: #4ade80; border-radius: 2px; box-shadow: 0 0 5px #4ade80; }
+
+  /* Player selection rows */
+  .md-player-sel-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 9px; margin-bottom: 5px; cursor: pointer;
+    background: rgba(0,0,0,0.35); border: 1px solid rgba(74,222,128,0.08);
+  }
+  .md-player-sel-row:hover { border-color: rgba(74,222,128,0.3); background: rgba(74,222,128,0.04); }
+  .md-player-sel-row.sel { background: rgba(74,222,128,0.08); border-color: #4ade80; }
+
+  .md-check-box {
+    width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0;
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(74,222,128,0.2);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .md-player-sel-row.sel .md-check-box { background: #4ade80; border-color: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.4); }
+
+  .md-sel-player-name { font-size: 14px; font-weight: 700; color: #9ca3af; flex: 1; font-family: 'Barlow Condensed', sans-serif; }
+  .md-player-sel-row.sel .md-sel-player-name { color: #e5e7eb; }
+
+  /* Add player form */
+  .md-field-lbl { font-size: 10px; color: #6b7280; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; font-weight: 600; }
+  .md-add-input {
+    width: 100%; padding: 10px 13px; margin-bottom: 12px;
+    background: rgba(0,0,0,0.6); border: 1px solid rgba(74,222,128,0.2);
+    border-radius: 8px; color: #fff;
+    font-family: 'Rajdhani', sans-serif; font-size: 14px; outline: none;
+  }
+  .md-add-input::placeholder { color: #1f2937; }
+  .md-add-input:focus { border-color: rgba(74,222,128,0.5); box-shadow: 0 0 0 2px rgba(74,222,128,0.08); }
+
+  .md-upload-lbl {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 13px; border-radius: 8px; cursor: pointer; margin-bottom: 12px;
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(74,222,128,0.15); color: #6b7280;
+    font-size: 13px; font-weight: 600;
+  }
+  .md-upload-lbl:hover { border-color: rgba(74,222,128,0.35); color: #9ca3af; }
+
+  .md-photo-preview { width: 80px; height: 80px; border-radius: 10px; object-fit: cover; border: 1px solid rgba(74,222,128,0.3); margin-bottom: 12px; }
+
+  .md-add-btn {
+    width: 100%; padding: 11px;
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: #fff; border: 1px solid rgba(74,222,128,0.4);
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .md-add-btn:hover { box-shadow: 0 0 14px rgba(74,222,128,0.28); }
+  .md-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Modal footer */
+  .md-modal-footer {
+    display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+    padding: 16px 28px; border-top: 1px solid rgba(74,222,128,0.1);
+    background: rgba(0,0,0,0.4); flex-shrink: 0;
+  }
+  .md-btn-save {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: #fff; border: 1px solid rgba(74,222,128,0.4);
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; padding: 11px 22px; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .md-btn-save:hover { box-shadow: 0 0 16px rgba(74,222,128,0.28); }
+  .md-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+  .md-btn-cancel {
+    background: rgba(0,0,0,0.4); color: #6b7280;
+    border: 1px solid rgba(255,255,255,0.08);
+    font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 600;
+    padding: 11px 20px; border-radius: 8px; cursor: pointer;
+  }
+  .md-btn-cancel:hover { color: #9ca3af; }
+
+  /* Spinner sm */
+  .md-spinner-sm { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: mdspin 0.8s linear infinite; }
+
+  /* Player loading */
+  .md-player-loading { display: flex; flex-direction: column; align-items: center; padding: 40px; gap: 12px; }
+  .md-sel-count { font-family: 'Orbitron', monospace; font-size: 9px; color: #374151; letter-spacing: 1px; margin-bottom: 10px; }
+  .md-sel-count span { color: #4ade80; font-weight: 900; }
+`;
+
+// ── Component ──────────────────────────────────────────────────────────────────
 const MatchDataViewer: React.FC = () => {
-   const { t } = useTranslation();
-   const { tournamentId, roundId, matchId } = useParams<{
-     tournamentId: string;
-     roundId: string;
-     matchId: string;
-   }>();
+  const { t } = useTranslation();
+  const { tournamentId, roundId, matchId } = useParams<{ tournamentId: string; roundId: string; matchId: string }>();
 
-  const [matchData, setMatchData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [matchData, setMatchData]           = useState<any>(null);
+  const [loading, setLoading]               = useState(false);
+  const [error, setError]                   = useState<string | null>(null);
   const [highlightedTeam, setHighlightedTeam] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'slot' | 'placePoints'>('slot');
-  const [editingTeam, setEditingTeam] = useState<null | {
-    teamIndex: number;
-    teamId: string;
-    teamName: string;
-  }>(null);
+  const [sortBy, setSortBy]                 = useState<'slot' | 'placePoints'>('slot');
+  const [editingTeam, setEditingTeam]       = useState<null | { teamIndex: number; teamId: string; teamName: string }>(null);
   const [availablePlayers, setAvailablePlayers] = useState<any[]>([]);
-  const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
+  const [selectedPlayers, setSelectedPlayers]   = useState<string[]>([]);
   const [playersLoading, setPlayersLoading] = useState(false);
-  const [savingRoster, setSavingRoster] = useState(false);
-  const [newPlayerName, setNewPlayerName] = useState('');
-  const [newPlayerId, setNewPlayerId] = useState('');
+  const [savingRoster, setSavingRoster]     = useState(false);
+  const [newPlayerName, setNewPlayerName]   = useState('');
+  const [newPlayerId, setNewPlayerId]       = useState('');
   const [newPlayerPhoto, setNewPlayerPhoto] = useState<File | null>(null);
-  const [addingPlayer, setAddingPlayer] = useState(false);
+  const [addingPlayer, setAddingPlayer]     = useState(false);
 
-  const teamRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const matchCacheRef = useRef<Record<string, any>>({});
-  const lastUpdateRef = useRef<Record<string, number>>({});
-  const setTeamRef = (id: string) => (el: HTMLDivElement | null) => {
-    if (el) teamRefs.current[id] = el;
-  };
+  const teamRefs         = useRef<Record<string, HTMLDivElement | null>>({});
+  const lastUpdateRef    = useRef<Record<string, number>>({});
+  const killUpdateBatcher  = useRef(new UpdateBatcher<{ change: number }>(3000, (e, n) => ({ change: e.change + n.change })));
+  const pointsUpdateBatcher = useRef(new UpdateBatcher<{ points: number }>(4000));
+  const deathUpdateBatcher  = useRef(new UpdateBatcher<{ bHasDied: boolean }>(2500));
+
+  const setTeamRef = (id: string) => (el: HTMLDivElement | null) => { if (el) teamRefs.current[id] = el; };
 
   const fetchMatchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      const url = `/tournament/${tournamentId}/round/${roundId}/match/${matchId}/matchdata`;
-      const response = await api.get(url);
-      const data = response.data;
-
-      // Normalize team IDs so _id always exists
+      const { data } = await api.get(`/tournament/${tournamentId}/round/${roundId}/match/${matchId}/matchdata`);
       setMatchData({
         ...data,
         teams: Array.isArray(data?.teams)
-          ? data.teams.map((team: Team) => ({
-            ...team,
-            _id: team?._id || team?.teamId || null,
-            placePoints: team.placePoints ?? 0,
-          }))
+          ? data.teams.map((t: Team) => ({ ...t, _id: t?._id || t?.teamId || null, placePoints: t.placePoints ?? 0 }))
           : [],
       });
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch match data');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err: any) { setError(err.message || 'Failed to fetch match data'); }
+    finally { setLoading(false); }
   }, [tournamentId, roundId, matchId]);
 
-  useEffect(() => {
-    if (!tournamentId || !roundId || !matchId) return;
-    fetchMatchData();
-  }, [tournamentId, roundId, matchId, fetchMatchData]);
+  useEffect(() => { if (tournamentId && roundId && matchId) fetchMatchData(); }, [tournamentId, roundId, matchId, fetchMatchData]);
 
   useEffect(() => {
     if (!socket) return;
-
-    console.log('MatchDataController: Setting up socket listeners');
-
     const handleLiveMatchUpdate = (data: any) => {
       if (!data) return;
-
-      const incomingMatchId = typeof data.matchId === 'object' && data.matchId?._id ? data.matchId._id : data.matchId;
-      if (incomingMatchId?.toString?.() !== matchId?.toString?.()) return;
-
-      setMatchData({
-        ...data,
-        teams: Array.isArray(data?.teams)
-          ? data.teams.map((team: any) => ({
-              ...team,
-              _id: team?._id || team?.teamId || null,
-              placePoints: team.placePoints ?? 0,
-            }))
-          : [],
-      });
+      const inId = typeof data.matchId === 'object' && data.matchId?._id ? data.matchId._id : data.matchId;
+      if (inId?.toString?.() !== matchId?.toString?.()) return;
+      setMatchData({ ...data, teams: Array.isArray(data?.teams) ? data.teams.map((t: any) => ({ ...t, _id: t?._id || t?.teamId || null, placePoints: t.placePoints ?? 0 })) : [] });
     };
-
     const handleTeamUpdate = (data: any) => {
-      setMatchData((prevData: any) => {
-        if (!prevData?.teams) return prevData;
-
-        const updatedTeams = prevData.teams.map((team: any) => {
+      setMatchData((prev: any) => {
+        if (!prev?.teams) return prev;
+        return { ...prev, teams: prev.teams.map((team: any) => {
           if (team._id !== data.teamId) return team;
-
           const changes = data?.changes || {};
-          // Start with shallow merge for non-array fields
-          const nextTeam: any = { ...team, ...changes };
-
-          // If server sent a partial players array (e.g., only {_id, bHasDied}), deep-merge by id
+          const next: any = { ...team, ...changes };
           if (Array.isArray(changes.players)) {
-            const updatesById = new Map(
-              changes.players.map((p: any) => [p._id?.toString?.() || p._id, p])
-            );
-            nextTeam.players = (team.players || []).map((p: any) => {
-              const key = p._id?.toString?.() || p._id;
-              const upd = updatesById.get(key);
-              return upd ? { ...p, ...upd } : p; // preserve existing fields like playerName
-            });
+            const byId = new Map(changes.players.map((p: any) => [p._id?.toString?.() || p._id, p]));
+            next.players = (team.players || []).map((p: any) => { const k = p._id?.toString?.() || p._id; const u = byId.get(k); return u ? { ...p, ...u } : p; });
           }
-
-          return nextTeam;
-        });
-
-        return { ...prevData, teams: updatedTeams };
+          return next;
+        })};
       });
     };
-
     const handlePlayerUpdate = (data: any) => {
-      setMatchData((prevData: any) => {
-        if (!prevData?.teams) return prevData;
-
-        return {
-          ...prevData,
-          teams: prevData.teams.map((team: any) => {
-            if (team._id !== data.teamId) return team;
-
-            return {
-              ...team,
-              players: team.players.map((player: any) =>
-                player._id === data.playerId
-                  ? { ...player, ...data.updates } // merge updated fields
-                  : player
-              ),
-            };
-          }),
-        };
+      setMatchData((prev: any) => {
+        if (!prev?.teams) return prev;
+        return { ...prev, teams: prev.teams.map((team: any) => team._id !== data.teamId ? team : { ...team, players: team.players.map((p: any) => p._id === data.playerId ? { ...p, ...data.updates } : p) }) };
       });
     };
-
-    // 🔹 Register socket listeners
     socket.on('liveMatchUpdate', handleLiveMatchUpdate);
     socket.on('matchDataUpdated', handleTeamUpdate);
     socket.on('playerStatsUpdated', handlePlayerUpdate);
-
-    // 🔹 Cleanup on unmount
     return () => {
-      console.log('MatchDataController: Cleaning up socket listeners');
       socket.off('liveMatchUpdate', handleLiveMatchUpdate);
       socket.off('matchDataUpdated', handleTeamUpdate);
       socket.off('playerStatsUpdated', handlePlayerUpdate);
-      // Notify socket manager that this component is done with the socket
       SocketManager.getInstance().disconnect();
     };
   }, []);
 
-  // Create batchers for different types of updates with proper accumulators
-  const killUpdateBatcher = useRef(new UpdateBatcher<{ change: number }>(
-    3000, // Significantly increased to prevent rapid requests
-    (existing, newUpdate) => ({ change: existing.change + newUpdate.change })
-  ));
-  const pointsUpdateBatcher = useRef(new UpdateBatcher<{ points: number }>(4000)); // Significantly increased
-  const deathUpdateBatcher = useRef(new UpdateBatcher<{ bHasDied: boolean }>(2500)); // Significantly increased
-
   const updateKillCount = async (teamIndex: number, playerIndex: number, change: number) => {
     if (!matchData) return;
-
-    const now = Date.now();
-    const key = `${teamIndex}-${playerIndex}`;
+    const now = Date.now(); const key = `${teamIndex}-${playerIndex}`;
     if (lastUpdateRef.current[key] && now - lastUpdateRef.current[key] < 200) return;
     lastUpdateRef.current[key] = now;
-
-    const team = matchData.teams[teamIndex];
-    const player = team.players[playerIndex];
-
-    // Calculate new killNum, clamp at 0
+    const team = matchData.teams[teamIndex]; const player = team.players[playerIndex];
     const newKillNum = Math.max(0, player.killNum + change);
     const actualChange = newKillNum - player.killNum;
-
-    // Update local state immediately (optimistic update)
-    setMatchData((prevData: any) => {
-      if (!prevData) return prevData;
-
-      const updatedTeams = [...prevData.teams];
-      updatedTeams[teamIndex] = {
-        ...team,
-        players: team.players.map((p: Player, idx: number) =>
-          idx === playerIndex
-            ? { ...p, killNum: newKillNum }
-            : p
-        ),
-      };
-
-      return { ...prevData, teams: updatedTeams };
-    });
-
-    // Only send update if actualChange is not zero
+    setMatchData((prev: any) => { if (!prev) return prev; const t = [...prev.teams]; t[teamIndex] = { ...team, players: team.players.map((p: Player, i: number) => i === playerIndex ? { ...p, killNum: newKillNum } : p) }; return { ...prev, teams: t }; });
     if (actualChange === 0) return;
-
-    // Use the batcher to accumulate changes
-    killUpdateBatcher.current.batch(
-      `${teamIndex}-${playerIndex}`,
-      { change: actualChange },
-      async (batchedUpdate) => {
-        await retryWithBackoff(() =>
-          api.patch(
-            `/tournament/${tournamentId}/round/${roundId}/match/${matchId}/matchdata/${matchData._id}/team/${team._id}/player/${player._id}/stats`,
-            { killNumChange: batchedUpdate.change }
-          )
-        );
-      }
-    );
+    killUpdateBatcher.current.batch(`${teamIndex}-${playerIndex}`, { change: actualChange }, async (u) => {
+      await retryWithBackoff(() => api.patch(`/tournament/${tournamentId}/round/${roundId}/match/${matchId}/matchdata/${matchData._id}/team/${team._id}/player/${player._id}/stats`, { killNumChange: u.change }));
+    });
   };
-
-  // Use the direct function for immediate UI response
-  const throttledUpdateKillCount = updateKillCount;
-
-
 
   const savePlacePoints = async (teamId: string, teamIndex: number, newPoints: number) => {
     if (!matchData) return;
-
-    const now = Date.now();
-    const key = `${teamId}-points`;
+    const now = Date.now(); const key = `${teamId}-points`;
     if (lastUpdateRef.current[key] && now - lastUpdateRef.current[key] < 300) return;
     lastUpdateRef.current[key] = now;
-
-    // Update local state immediately
-    setMatchData((prevData: any) => {
-      if (!prevData?.teams?.[teamIndex]) return prevData;
-
-      const updatedTeams = [...prevData.teams];
-      updatedTeams[teamIndex] = {
-        ...updatedTeams[teamIndex],
-        placePoints: typeof newPoints === 'number' ? newPoints : 0,
-      };
-
-      return { ...prevData, teams: updatedTeams };
+    setMatchData((prev: any) => { if (!prev?.teams?.[teamIndex]) return prev; const t = [...prev.teams]; t[teamIndex] = { ...t[teamIndex], placePoints: typeof newPoints === 'number' ? newPoints : 0 }; return { ...prev, teams: t }; });
+    pointsUpdateBatcher.current.batch(`${teamId}-points`, { points: newPoints }, async (u) => {
+      await retryWithBackoff(() => api.patch(`/tournament/${tournamentId}/round/${roundId}/match/${matchId}/matchdata/${matchData._id}/team/${teamId}/points`, { placePoints: u.points }));
     });
-
-    // Use batcher to prevent rapid requests
-    pointsUpdateBatcher.current.batch(
-      `${teamId}-points`,
-      { points: newPoints },
-      async (batchedUpdate) => {
-        await retryWithBackoff(() =>
-          api.patch(
-            `/tournament/${tournamentId}/round/${roundId}/match/${matchId}/matchdata/${matchData._id}/team/${teamId}/points`,
-            { placePoints: batchedUpdate.points }
-          )
-        );
-      }
-    );
-  };
-
-
-
-  const openChangePlayers = async (teamIndex: number, teamId: string, teamName: string) => {
-    try {
-      // Open modal immediately for responsiveness
-      setEditingTeam({ teamIndex, teamId, teamName });
-      setPlayersLoading(true);
-
-      // Fetch the team from MainTeams API to get the latest players
-      const teamRes = await api.get(`/teams/${teamId}`);
-      const teamData = teamRes.data;
-
-      const playersForTeam = (teamData.players || []).filter((p: any) => p && p.playerName && p._id);
-
-      // Preselected players from current state (no extra fetch)
-      const preselectedPlayers = (matchData?.teams?.[teamIndex]?.players || []).filter((p: any) => p && p.playerName && p._id);
-
-      const normalizeName = (name: string) => name.trim().toLowerCase();
-
-      const preselectedMap = new Map<string, any>();
-      preselectedPlayers.forEach((p: Player) => preselectedMap.set(normalizeName(p.playerName), p));
-
-      const filteredAvailablePlayers = playersForTeam.filter((p: Player) => {
-        const normalized = normalizeName(p.playerName);
-        const pre = preselectedMap.get(normalized);
-        return !(pre && pre._id !== p._id);
-      });
-
-      const combinedPlayersMap = new Map<string, any>();
-      [...preselectedPlayers, ...filteredAvailablePlayers].forEach((p: any) => {
-        combinedPlayersMap.set(p._id.toString(), p);
-      });
-      const combinedPlayers = Array.from(combinedPlayersMap.values());
-
-      setAvailablePlayers(combinedPlayers);
-      const selectedPlayerIds = preselectedPlayers
-        .map((p: Player) => p._id.toString())
-        .filter((id: string) => combinedPlayersMap.has(id));
-      setSelectedPlayers(selectedPlayerIds);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch team players');
-    } finally {
-      setPlayersLoading(false);
-    }
-  };
-
-  const addNewPlayer = async () => {
-    if (!editingTeam || !newPlayerName.trim()) {
-      alert(t('matchData.pleaseEnterPlayerName'));
-      return;
-    }
-
-    setAddingPlayer(true);
-    try {
-      let photoUrl = '';
-      if (newPlayerPhoto) {
-        photoUrl = await uploadToCloudinary(newPlayerPhoto, "players/photos", "player_photo");
-      }
-
-      // Fetch current team
-      const { data: team } = await api.get(`/teams/${editingTeam.teamId}`);
-
-      // Add new player to team
-      const newPlayerTemp = {
-        playerName: newPlayerName.trim(),
-        playerId: newPlayerId.trim() || undefined,
-        photo: photoUrl || undefined,
-      };
-
-      const updatedPlayers = [...team.players, newPlayerTemp];
-
-      // Update team
-      const { data: updatedTeam } = await api.put(`/teams/${editingTeam.teamId}`, {
-        ...team,
-        players: updatedPlayers,
-      });
-
-      // Get the newly added player with real _id
-      const newPlayer = updatedTeam.players.find((p: any) =>
-        p.playerName === newPlayerTemp.playerName &&
-        (!newPlayerTemp.playerId || p.playerId === newPlayerTemp.playerId)
-      );
-
-      if (!newPlayer) {
-        throw new Error('Failed to find newly added player');
-      }
-
-      // Update local available players
-      setAvailablePlayers(prev => [...prev, newPlayer]);
-
-      // Clear form
-      setNewPlayerName('');
-      setNewPlayerId('');
-      setNewPlayerPhoto(null);
-
-      alert(t('matchData.playerAddedSuccessfully'));
-    } catch (err: any) {
-      console.error('Failed to add player:', err);
-      alert(t('matchData.failedToAddPlayer'));
-    } finally {
-      setAddingPlayer(false);
-    }
-  };
-
-  const saveChangedPlayers = async () => {
-    if (!editingTeam || selectedPlayers.length < 1 || selectedPlayers.length > 4) {
-      alert(t('matchData.pleaseSelectPlayers'));
-      return;
-    }
-
-    setSavingRoster(true);
-    try {
-      const oldPlayers = matchData.teams[editingTeam.teamIndex].players.map((p: any) => p._id.toString());
-      const newPlayers = selectedPlayers.map((id) => id.toString());
-
-      // --- Modified replacement logic for any number of players ---
-      const removed = oldPlayers.filter((id: string) => !newPlayers.includes(id));
-
-      const added = newPlayers.filter(id => !oldPlayers.includes(id));
-
-      // Pair up as many as possible for replacement
-      const replacements = removed
-        .map((oldId: string, idx: number) => ({
-          oldPlayerId: oldId,
-          newPlayerId: added[idx] as string | undefined,
-        }))
-        .filter((pair: { oldPlayerId: string; newPlayerId?: string }) => pair.newPlayerId !== undefined);
-
-      if (replacements.length > 0) {
-        const url = `/matchdata/${matchData._id}/team/${editingTeam.teamId}/replace`;
-        await api.put(url, { replacements });
-      }
-
-      // If there are extra added players, add them
-      if (added.length > removed.length) {
-        const extraAdded = added.slice(removed.length);
-        if (extraAdded.length > 0) {
-          const url = `/matchdata/${matchData._id}/team/${editingTeam.teamId}/player/add`;
-          await api.post(url, { newPlayerIds: extraAdded });
-        }
-      }
-
-      // If there are extra removed players, remove them
-      if (removed.length > added.length) {
-        const extraRemoved = removed.slice(added.length);
-        if (extraRemoved.length > 0) {
-          const url = `/matchdata/${matchData._id}/team/${editingTeam.teamId}/players/remove`;
-          await api.delete(url, { data: { playerIds: extraRemoved } });
-        }
-      }
-      // --- End of modified replacement logic ---
-
-      // Update state locally without resetting existing players stats
-      setMatchData((prev: any) => {
-        if (!prev) return prev;
-        const updatedTeams = [...prev.teams];
-
-        const currentPlayers = updatedTeams[editingTeam.teamIndex].players;
-
-        const newPlayersWithStats = selectedPlayers.map((id) => {
-          // If player already exists → preserve stats
-          const existing = currentPlayers.find((p: any) => p._id.toString() === id);
-          if (existing) return existing;
-
-          // If player is new → create blank stats object
-          const fromAvailable = availablePlayers.find(p => p._id.toString() === id);
-          if (fromAvailable) {
-            return {
-              ...fromAvailable,
-              killNum: 0,
-              damage: 0,
-              survivalTime: 0,
-              assists: 0,
-              bHasDied: false,
-              // add any other fields your backend initializes for a new player
-            };
-          }
-
-          return null;
-        }).filter(Boolean);
-
-        updatedTeams[editingTeam.teamIndex] = {
-          ...updatedTeams[editingTeam.teamIndex],
-          players: newPlayersWithStats
-        };
-
-        return { ...prev, teams: updatedTeams };
-      });
-
-      setEditingTeam(null);
-      setNewPlayerName('');
-      setNewPlayerId('');
-      setNewPlayerPhoto(null);
-    } catch (err: any) {
-      setError(err.message || 'Failed to update players');
-    } finally {
-      setSavingRoster(false);
-    }
   };
 
   const togglePlayerDeath = async (teamIndex: number, playerIndex: number) => {
     if (!matchData) return;
-
-    const now = Date.now();
-    const key = `${teamIndex}-${playerIndex}-death`;
+    const now = Date.now(); const key = `${teamIndex}-${playerIndex}-death`;
     if (lastUpdateRef.current[key] && now - lastUpdateRef.current[key] < 250) return;
     lastUpdateRef.current[key] = now;
-
-    const team = matchData.teams[teamIndex];
-    const player = team.players[playerIndex];
-    const newBHasDied = !player.bHasDied;
-
-    // Optimistic UI
-    setMatchData((prev: MatchData | null) => {
-      if (!prev) return prev;
-
-      const updatedTeams = [...prev.teams];
-      updatedTeams[teamIndex] = {
-        ...team,
-        players: team.players.map((p: Player, idx: number) =>
-          idx === playerIndex ? { ...p, bHasDied: newBHasDied } : p
-        ),
-      };
-
-      return { ...prev, teams: updatedTeams };
+    const team = matchData.teams[teamIndex]; const player = team.players[playerIndex];
+    const newVal = !player.bHasDied;
+    setMatchData((prev: MatchData | null) => { if (!prev) return prev; const t = [...prev.teams]; t[teamIndex] = { ...team, players: team.players.map((p: Player, i: number) => i === playerIndex ? { ...p, bHasDied: newVal } : p) }; return { ...prev, teams: t }; });
+    deathUpdateBatcher.current.batch(`${key}`, { bHasDied: newVal }, async (u) => {
+      await retryWithBackoff(() => api.patch(`/tournament/${tournamentId}/round/${roundId}/match/${matchId}/matchdata/${matchData._id}/team/${team._id}/player/${player._id}/stats`, { bHasDied: u.bHasDied }));
     });
-
-    // Use batcher to prevent rapid requests
-    deathUpdateBatcher.current.batch(
-      `${teamIndex}-${playerIndex}-death`,
-      { bHasDied: newBHasDied },
-      async (batchedUpdate) => {
-        await retryWithBackoff(() =>
-          api.patch(
-            `/tournament/${tournamentId}/round/${roundId}/match/${matchId}/matchdata/${matchData._id}/team/${team._id}/player/${player._id}/stats`,
-            { bHasDied: batchedUpdate.bHasDied }
-          )
-        );
-      }
-    );
   };
 
-  // Toggle all players in a team using bulk update with request queue
   const toggleAllPlayersDeath = async (teamIndex: number) => {
     if (!matchData) return;
-
-    const now = Date.now();
-    const key = `team-${teamIndex}-all-death`;
+    const now = Date.now(); const key = `team-${teamIndex}-all-death`;
     if (lastUpdateRef.current[key] && now - lastUpdateRef.current[key] < 500) return;
     lastUpdateRef.current[key] = now;
-
     const team = matchData.teams[teamIndex];
-    const newValue = !team.players.every((p: Player) => p.bHasDied);
-
-    // Optimistic UI
-    setMatchData((prev: MatchData | null) => {
-      if (!prev) return prev;
-      const updatedTeams = [...prev.teams];
-      updatedTeams[teamIndex] = {
-        ...team,
-        players: team.players.map((p: Player) => ({ ...p, bHasDied: newValue })),
-      };
-      return { ...prev, teams: updatedTeams };
-    });
-
-    // Use request queue to prevent rapid bulk updates
+    const newVal = !team.players.every((p: Player) => p.bHasDied);
+    setMatchData((prev: MatchData | null) => { if (!prev) return prev; const t = [...prev.teams]; t[teamIndex] = { ...team, players: team.players.map((p: Player) => ({ ...p, bHasDied: newVal })) }; return { ...prev, teams: t }; });
     requestQueue.add(async () => {
-      await api.patch(
-        `/tournament/${tournamentId}/round/${roundId}/match/${matchId}/matchdata/${matchData._id}/team/${team._id}/bulk`,
-        { bHasDied: newValue }
-      );
-    }).catch((err) => {
-      console.error('Failed to toggle all players death:', err);
-    });
+      await api.patch(`/tournament/${tournamentId}/round/${roundId}/match/${matchId}/matchdata/${matchData._id}/team/${team._id}/bulk`, { bHasDied: newVal });
+    }).catch(console.error);
   };
 
+  const openChangePlayers = async (teamIndex: number, teamId: string, teamName: string) => {
+    setEditingTeam({ teamIndex, teamId, teamName }); setPlayersLoading(true);
+    try {
+      const { data: teamData } = await api.get(`/teams/${teamId}`);
+      const playersForTeam = (teamData.players || []).filter((p: any) => p && p.playerName && p._id);
+      const preselected = (matchData?.teams?.[teamIndex]?.players || []).filter((p: any) => p && p.playerName && p._id);
+      const norm = (n: string) => n.trim().toLowerCase();
+      const preMap = new Map<string, any>(); preselected.forEach((p: Player) => preMap.set(norm(p.playerName), p));
+      const filtered = playersForTeam.filter((p: Player) => { const pre = preMap.get(norm(p.playerName)); return !(pre && pre._id !== p._id); });
+      const combined = new Map<string, any>(); [...preselected, ...filtered].forEach((p: any) => combined.set(p._id.toString(), p));
+      setAvailablePlayers(Array.from(combined.values()));
+      setSelectedPlayers(preselected.map((p: Player) => p._id.toString()).filter((id: string) => combined.has(id)));
+    } catch (err: any) { setError(err.message || 'Failed to fetch team players'); }
+    finally { setPlayersLoading(false); }
+  };
 
-  // Sorting logic for teams grid only (memoized)
+  const addNewPlayer = async () => {
+    if (!editingTeam || !newPlayerName.trim()) { alert(t('matchData.pleaseEnterPlayerName')); return; }
+    setAddingPlayer(true);
+    try {
+      let photoUrl = '';
+      if (newPlayerPhoto) photoUrl = await uploadToCloudinary(newPlayerPhoto, "players/photos", "player_photo");
+      const { data: team } = await api.get(`/teams/${editingTeam.teamId}`);
+      const { data: updatedTeam } = await api.put(`/teams/${editingTeam.teamId}`, { ...team, players: [...team.players, { playerName: newPlayerName.trim(), playerId: newPlayerId.trim() || undefined, photo: photoUrl || undefined }] });
+      const newPlayer = updatedTeam.players.find((p: any) => p.playerName === newPlayerName.trim() && (!newPlayerId.trim() || p.playerId === newPlayerId.trim()));
+      if (!newPlayer) throw new Error('Failed to find newly added player');
+      setAvailablePlayers(prev => [...prev, newPlayer]);
+      setNewPlayerName(''); setNewPlayerId(''); setNewPlayerPhoto(null);
+      alert(t('matchData.playerAddedSuccessfully'));
+    } catch { alert(t('matchData.failedToAddPlayer')); }
+    finally { setAddingPlayer(false); }
+  };
+
+  const saveChangedPlayers = async () => {
+    if (!editingTeam || selectedPlayers.length < 1 || selectedPlayers.length > 4) { alert(t('matchData.pleaseSelectPlayers')); return; }
+    setSavingRoster(true);
+    try {
+      const oldPlayers = matchData.teams[editingTeam.teamIndex].players.map((p: any) => p._id.toString());
+      const newPlayers = selectedPlayers.map(id => id.toString());
+      const removed = oldPlayers.filter((id: string) => !newPlayers.includes(id));
+      const added = newPlayers.filter(id => !oldPlayers.includes(id));
+      const replacements = removed.map((oldId: string, i: number) => ({ oldPlayerId: oldId, newPlayerId: added[i] })).filter((r: any) => r.newPlayerId !== undefined);
+      if (replacements.length > 0) await api.put(`/matchdata/${matchData._id}/team/${editingTeam.teamId}/replace`, { replacements });
+      if (added.length > removed.length) await api.post(`/matchdata/${matchData._id}/team/${editingTeam.teamId}/player/add`, { newPlayerIds: added.slice(removed.length) });
+      if (removed.length > added.length) await api.delete(`/matchdata/${matchData._id}/team/${editingTeam.teamId}/players/remove`, { data: { playerIds: removed.slice(added.length) } });
+      setMatchData((prev: any) => {
+        if (!prev) return prev;
+        const t = [...prev.teams];
+        const current = t[editingTeam.teamIndex].players;
+        t[editingTeam.teamIndex] = { ...t[editingTeam.teamIndex], players: selectedPlayers.map(id => { const ex = current.find((p: any) => p._id.toString() === id); if (ex) return ex; const fa = availablePlayers.find(p => p._id.toString() === id); return fa ? { ...fa, killNum: 0, damage: 0, survivalTime: 0, assists: 0, bHasDied: false } : null; }).filter(Boolean) };
+        return { ...prev, teams: t };
+      });
+      setEditingTeam(null); setNewPlayerName(''); setNewPlayerId(''); setNewPlayerPhoto(null);
+    } catch (err: any) { setError(err.message || 'Failed to update players'); }
+    finally { setSavingRoster(false); }
+  };
+
   const sortedTeams = useMemo(() => {
-    const teams = [...(matchData?.teams ?? [])];
-    teams.sort((a: any, b: any) => {
-      if (sortBy === 'slot') {
-        return (a.slot ?? 0) - (b.slot ?? 0);
-      } else {
-        // Sort descending by placePoints
-        return (b.placePoints ?? 0) - (a.placePoints ?? 0);
-      }
-    });
-    return teams;
+    const t = [...(matchData?.teams ?? [])];
+    t.sort((a: any, b: any) => sortBy === 'slot' ? (a.slot ?? 0) - (b.slot ?? 0) : (b.placePoints ?? 0) - (a.placePoints ?? 0));
+    return t;
   }, [matchData?.teams, sortBy]);
 
-  // Totals for header (memoized)
-  const totalTeams = useMemo(() => (
-    (matchData?.teams || []).filter((team: any) => team.players.some((p: any) => !p.bHasDied)).length
-  ), [matchData?.teams]);
+  const totalTeams   = useMemo(() => (matchData?.teams || []).filter((t: any) => t.players.some((p: any) => !p.bHasDied)).length, [matchData?.teams]);
+  const totalPlayers = useMemo(() => (matchData?.teams || []).reduce((s: number, t: any) => s + t.players.filter((p: any) => !p.bHasDied).length, 0), [matchData?.teams]);
 
-  const totalPlayers = useMemo(() => (
-    (matchData?.teams || []).reduce((sum: number, team: any) => sum + team.players.filter((p: any) => !p.bHasDied).length, 0)
-  ), [matchData?.teams]);
-
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
-          <p className="text-purple-400 font-medium animate-pulse text-lg">Loading Match Data...</p>
-        </div>
+  // ── Loading / Error ──────────────────────────────────────────────────────────
+  if (loading) return (
+    <>
+      <style>{STYLES}</style>
+      <div className="md-root md-center">
+        <div className="md-spinner" />
+        <p className="md-spin-txt">LOADING MATCH DATA</p>
       </div>
-    );
-  }
+    </>
+  );
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-6 max-w-md text-center">
-          <p className="text-red-400 font-semibold text-lg">Error: {error}</p>
-        </div>
+  if (error) return (
+    <>
+      <style>{STYLES}</style>
+      <div className="md-root md-center">
+        <p style={{ fontFamily: 'Orbitron,monospace', color: '#f87171', fontSize: 14 }}>ERROR: {error}</p>
       </div>
-    );
-  }
+    </>
+  );
 
-  if (!matchData) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <p className="text-gray-400 font-medium text-lg">No match data found.</p>
+  if (!matchData) return (
+    <>
+      <style>{STYLES}</style>
+      <div className="md-root md-center">
+        <p style={{ fontFamily: 'Orbitron,monospace', color: '#374151', fontSize: 12, letterSpacing: 2 }}>NO MATCH DATA</p>
       </div>
-    );
-  }
+    </>
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white font-sans">
-      {/* Sticky header + navigation */}
-      <div className="sticky top-0 z-50 bg-slate-900/95 backdrop-blur-sm border-b border-slate-700 shadow-xl">
-        {/* Stats Header */}
-        <div className="flex justify-center items-center gap-8 py-4 border-b border-slate-800">
-          <div className="flex items-center gap-3 bg-slate-800/50 px-6 py-3 rounded-xl border border-slate-700">
-            <span className="text-gray-400 text-sm uppercase tracking-wider font-medium">Teams Alive</span>
-            <span className="text-3xl font-bold text-white">{totalTeams}</span>
+    <>
+      <style>{STYLES}</style>
+      <div className="md-root md-page">
+        <div className="md-hex" />
+        <div className="md-scan" />
+        <div className="md-glow" />
+
+        {/* ── Sticky Top Bar ── */}
+        <div className="md-topbar">
+          {/* Live stats */}
+          <div className="md-live-row">
+            <div className="md-live-pill">
+              <span className="md-live-pill-lbl">Teams Alive</span>
+              <span className="md-orb md-live-pill-val">{totalTeams}</span>
+            </div>
+            <div className="md-live-dot" />
+            <div className="md-live-pill">
+              <span className="md-live-pill-lbl">Players Alive</span>
+              <span className="md-orb md-live-pill-val green">{totalPlayers}</span>
+            </div>
           </div>
-          <div className="w-px h-12 bg-slate-700"></div>
-          <div className="flex items-center gap-3 bg-slate-800/50 px-6 py-3 rounded-xl border border-slate-700">
-            <span className="text-gray-400 text-sm uppercase tracking-wider font-medium">Players Alive</span>
-            <span className="text-3xl font-bold text-green-400">{totalPlayers}</span>
-          </div>
-        </div>
 
-        {/* Navigation buttons */}
-        <div className="flex flex-wrap gap-2 justify-center py-3 px-4 max-w-6xl mx-auto">
-          {matchData.teams.map((team: any) => {
-            const allPlayersDead = team.players.length > 0 && team.players.every((p: any) => p.bHasDied);
-
-            return (
-              <button
-                key={team._id}
-                onClick={() => {
-                  const currentTeamId = team._id;
-                  setHighlightedTeam(currentTeamId);
-                  setTimeout(() => {
-                    const el = teamRefs.current[currentTeamId];
-                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }, 0);
-                  setTimeout(() => {
-                    setHighlightedTeam(prev => prev === currentTeamId ? null : prev);
-                  }, 1500);
-                }}
-                className={`
-                  px-3 py-1.5 rounded-lg font-bold text-sm transition-all duration-200 border shadow-sm
-                  ${allPlayersDead
-                    ? 'bg-red-900/30 text-red-400 border-red-900/50 hover:bg-red-900/50'
-                    : 'bg-slate-800 text-gray-300 border-slate-700 hover:bg-slate-700 hover:text-white hover:border-slate-600'
-                  }
-                  ${highlightedTeam === team._id ? 'ring-2 ring-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)] scale-105 bg-slate-700 text-white' : ''}
-                `}
-              >
-                Slot {team.slot}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Main content container */}
-      <div className="container mx-auto px-4 py-6 max-w-[1800px]">
-        {/* Sort dropdown */}
-        <div className="flex justify-end mb-6">
-          <div className="flex items-center gap-3 bg-slate-800/50 px-4 py-2 rounded-xl border border-slate-700 backdrop-blur-sm">
-            <label className="text-purple-400 font-bold text-sm uppercase tracking-wider">Sort by:</label>
-            <select
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value as 'slot' | 'placePoints')}
-              className="bg-transparent text-white font-medium focus:outline-none cursor-pointer text-sm"
-            >
-              <option value="slot" className="bg-slate-800">Slot Number</option>
-              <option value="placePoints" className="bg-slate-800">Placement Points</option>
-            </select>
+          {/* Slot nav */}
+          <div className="md-slot-nav">
+            {matchData.teams.map((team: any) => {
+              const dead = team.players.length > 0 && team.players.every((p: any) => p.bHasDied);
+              return (
+                <button
+                  key={team._id}
+                  className={`md-slot-btn${dead ? ' dead' : ''}${highlightedTeam === team._id ? ' highlighted' : ''}`}
+                  onClick={() => {
+                    setHighlightedTeam(team._id);
+                    setTimeout(() => { teamRefs.current[team._id]?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 0);
+                    setTimeout(() => setHighlightedTeam(p => p === team._id ? null : p), 1800);
+                  }}
+                >
+                  {team.teamTag || `S${team.slot}`}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Teams grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {/* Sort */}
+        <div className="md-sort-bar">
+          <span className="md-sort-lbl">SORT</span>
+          <select className="md-sort-select" value={sortBy} onChange={e => setSortBy(e.target.value as 'slot' | 'placePoints')}>
+            <option value="slot">SLOT</option>
+            <option value="placePoints">POINTS</option>
+          </select>
+        </div>
+
+        {/* ── Teams Grid ── */}
+        <div className="md-grid">
           {sortedTeams.map((team: any) => {
-            // Find the ACTUAL index in matchData.teams (not the sorted index)
-            const teamIndex = matchData.teams.findIndex((t: any) => t._id === team._id);
-            const allPlayersDied = team.players.every((p: any) => p.bHasDied);
-            const totalKills = team.players.reduce((sum: number, player: any) => sum + (player.killNum ?? 0), 0);
-            const totalPoints = (team.placePoints ?? 0) + totalKills;
+            const teamIndex  = matchData.teams.findIndex((t: any) => t._id === team._id);
+            const allDead    = team.players.every((p: any) => p.bHasDied);
+            const totalKills = team.players.reduce((s: number, p: any) => s + (p.killNum ?? 0), 0);
+            const totalPts   = (team.placePoints ?? 0) + totalKills;
+            const isHighlighted = highlightedTeam === team._id;
 
             return (
               <div
                 key={team._id}
                 ref={setTeamRef(team._id)}
-                className={`
-                  relative rounded-2xl p-5 transition-all duration-300 group
-                  ${highlightedTeam === team._id
-                    ? 'bg-slate-800 border-2 border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.2)] scale-[1.02]'
-                    : 'bg-slate-800/40 border border-slate-700 hover:bg-slate-800/60 hover:border-slate-600 hover:shadow-xl'
-                  }
-                  ${allPlayersDied ? 'border-red-900/50' : ''}
-                `}
+                className={`md-card${allDead ? ' eliminated' : ''}${isHighlighted ? ' highlighted' : ''}`}
               >
-                {/* Team Header */}
-                <div className="flex items-start justify-between mb-4 pb-4 border-b border-slate-700/50">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="bg-slate-700/50 text-yellow-300 text-xl font-mono px-2 py-0.5 rounded border border-slate-600/50 font-bold">
-                        {team.slot}
-                      </span>
-                      <h4 className="text-xl font-bold text-white truncate max-w-[180px]" title={team.teamName}>
-                        {team.teamName}
-                      </h4>
+                <div className="md-card-topbar" />
+
+                {/* Card header */}
+                <div className="md-card-hdr">
+                  <div className="md-card-hdr-l">
+                    <span className="md-orb md-slot-badge">S{team.slot}</span>
+                    <div>
+                      <div className="md-orb md-team-name" title={team.teamName}>{team.teamName}</div>
+                      {team.teamTag && <div className="md-team-tag">[{team.teamTag}]</div>}
                     </div>
-                    {team.teamTag && (
-                      <span className="text-sm text-purple-400 font-medium tracking-wide">[{team.teamTag}]</span>
-                    )}
                   </div>
 
-                  <div className="flex flex-col items-end gap-2">
-                    <label className="flex items-center gap-2 cursor-pointer group/check">
-                      <span className={`text-xs font-bold transition-colors ${allPlayersDied ? 'text-red-500' : 'text-gray-500 group-hover/check:text-gray-400'}`}>
-                        ELIMINATED
-                      </span>
-                      <div
-                        onClick={() => toggleAllPlayersDeath(teamIndex)}
-                        className={`relative w-10 h-5 rounded-full transition-all duration-300 cursor-pointer ${allPlayersDied ? 'bg-red-600 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-slate-700 hover:bg-slate-600'}`}
-                        title="Mark all players as Died"
-                      >
-                        <div className={`absolute top-0.5 w-4 h-4 rounded-full transition-all duration-300 ${allPlayersDied ? 'left-5 bg-white' : 'left-0.5 bg-gray-400'}`}></div>
+                  <div className="md-card-hdr-r">
+                    {/* Elim toggle */}
+                    <div className="md-elim-toggle" onClick={() => toggleAllPlayersDeath(teamIndex)}>
+                      <span className="md-orb md-elim-lbl">ELIM</span>
+                      <div className={`md-toggle-track${allDead ? ' on' : ''}`}>
+                        <div className="md-toggle-thumb" />
                       </div>
-                    </label>
-
+                    </div>
+                    {/* Edit roster */}
                     <button
+                      className="md-edit-roster-btn"
                       onClick={() => openChangePlayers(teamIndex, team.teamId || team._id, team.teamName)}
-                      className="text-xs bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded-lg transition-colors border border-blue-600/20"
                     >
-                      Edit Roster
+                      <FaEdit size={9} /> ROSTER
                     </button>
                   </div>
                 </div>
 
-                {/* Points Section */}
-                <div className="flex items-center justify-between mb-4 bg-slate-900/30 p-3 rounded-xl border border-slate-700/30">
-                  <div className="flex items-center gap-3">
-                    <span className="text-gray-400 text-sm font-medium">Place Points:</span>
+                {/* Points row */}
+                <div className="md-points-row">
+                  <div className="md-pts-group">
+                    <span className="md-pts-lbl">Place Pts</span>
                     <input
-                      type="number"
-                      min={0}
+                      type="number" min={0}
                       value={team.placePoints ?? 0}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const numVal = val === '' ? 0 : parseInt(val, 10);
+                      className="md-pts-input"
+                      onChange={e => {
+                        const v = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
                         setMatchData((prev: MatchData | null) => {
                           if (!prev) return prev;
-                          const updatedTeams = [...prev.teams];
-                          updatedTeams[teamIndex] = {
-                            ...updatedTeams[teamIndex],
-                            placePoints: isNaN(numVal) ? 0 : numVal,
-                          };
-                          return { ...prev, teams: updatedTeams };
+                          const t = [...prev.teams]; t[teamIndex] = { ...t[teamIndex], placePoints: isNaN(v) ? 0 : v };
+                          return { ...prev, teams: t };
                         });
                       }}
-                      onBlur={(e) => {
-                        const val = e.target.value;
-                        const numVal = val === '' ? 0 : parseInt(val, 10);
-                        if (!isNaN(numVal)) {
-                          savePlacePoints(team._id, teamIndex, numVal);
-                        }
+                      onBlur={e => {
+                        const v = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                        if (!isNaN(v)) savePlacePoints(team._id, teamIndex, v);
                       }}
-                      className="w-16 bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 text-center text-white font-bold focus:ring-2 focus:ring-purple-500 outline-none transition-all"
                     />
                   </div>
-                  <div className="flex gap-4 text-sm">
-                    <div className="flex flex-col items-end">
-                      <span className="text-gray-500 text-xs uppercase">Kills</span>
-                      <span className="text-yellow-500 font-bold text-lg">{totalKills}</span>
+                  <div className="md-totals">
+                    <div className="md-total-item">
+                      <span className="md-total-lbl">Kills</span>
+                      <span className="md-orb md-total-val kills">{totalKills}</span>
                     </div>
-                    <div className="w-px bg-slate-700"></div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-gray-500 text-xs uppercase">Total</span>
-                      <span className="text-green-400 font-bold text-lg">{totalPoints}</span>
+                    <div className="md-total-divider" />
+                    <div className="md-total-item">
+                      <span className="md-total-lbl">Total</span>
+                      <span className="md-orb md-total-val total">{totalPts}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Players List */}
-                <div className="space-y-2">
-                  {team.players.map((player: any, playerIndex: number) => (
-                    <div
-                      key={player._id}
-                      className={`
-                        flex items-center gap-3 p-2.5 rounded-lg transition-colors border
-                        ${player.bHasDied
-                          ? 'bg-red-900/10 border-red-900/20'
-                          : 'bg-slate-700/30 border-slate-700/30 hover:bg-slate-700/50'
-                        }
-                      `}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-medium truncate ${player.bHasDied ? 'text-red-400/70 line-through' : 'text-gray-200'}`}>
-                          {player.playerName}
-                        </p>
+                {/* Players */}
+                <div className="md-players">
+                  {team.players.map((player: any, pi: number) => (
+                    <div key={player._id} className={`md-player-row${player.bHasDied ? ' dead' : ''}`}>
+                      <span className="md-bar md-player-name" title={player.playerName}>{player.playerName}</span>
+
+                      {/* Kill counter */}
+                      <div className="md-kill-group">
+                        <button className="md-kill-btn minus" onClick={() => updateKillCount(teamIndex, pi, -1)}>−</button>
+                        <span className="md-orb md-kill-val">{player.killNum ?? 0}</span>
+                        <button className="md-kill-btn plus"  onClick={() => updateKillCount(teamIndex, pi, 1)}>+</button>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => throttledUpdateKillCount(teamIndex, playerIndex, -1)}
-                          className="w-7 h-7 flex items-center justify-center rounded-md bg-slate-800 hover:bg-red-900/30 text-gray-400 hover:text-red-400 transition-colors border border-slate-600 hover:border-red-800"
-                        >
-                          -
-                        </button>
-                        <span className="w-6 text-center font-bold text-yellow-500">
-                          {player.killNum ?? 0}
-                        </span>
-                        <button
-                          onClick={() => throttledUpdateKillCount(teamIndex, playerIndex, 1)}
-                          className="w-7 h-7 flex items-center justify-center rounded-md bg-slate-800 hover:bg-green-900/30 text-gray-400 hover:text-green-400 transition-colors border border-slate-600 hover:border-green-800"
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      <div className="w-px h-6 bg-slate-700/50 mx-1"></div>
-
+                      {/* Death toggle */}
                       <div
-                        onClick={() => togglePlayerDeath(teamIndex, playerIndex)}
-                        className={`relative w-12 h-6 rounded-full transition-all duration-300 cursor-pointer flex-shrink-0 ${player.bHasDied ? 'bg-red-600 shadow-[0_0_10px_rgba(239,68,68,0.4)]' : 'bg-green-600 shadow-[0_0_10px_rgba(34,197,94,0.4)]'}`}
-                        title={player.bHasDied ? 'Click to mark ALIVE' : 'Click to mark DEAD'}
+                        className={`md-death-toggle${player.bHasDied ? ' dead' : ''}`}
+                        onClick={() => togglePlayerDeath(teamIndex, pi)}
+                        title={player.bHasDied ? 'Mark ALIVE' : 'Mark DEAD'}
                       >
-                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-300 shadow-md ${player.bHasDied ? 'left-7' : 'left-1'}`}></div>
-                        <span className={`absolute text-[8px] font-bold transition-all duration-200 top-1.5 ${player.bHasDied ? 'left-1.5 text-red-200' : 'right-1 text-green-200'}`}>
-                          {player.bHasDied ? '💀' : '✓'}
-                        </span>
+                        <div className="md-death-thumb" />
+                        {player.bHasDied
+                          ? <span className="md-death-lbl dead">OUT</span>
+                          : <span className="md-death-lbl alive">IN</span>
+                        }
                       </div>
                     </div>
                   ))}
@@ -871,195 +810,124 @@ const MatchDataViewer: React.FC = () => {
             );
           })}
         </div>
-      </div>
 
-    {/* Change Players Modal */}
-      {editingTeam && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-          <div className="bg-slate-800 border border-slate-700 p-8 rounded-2xl shadow-2xl w-full max-w-5xl relative flex flex-col max-h-[90vh]">
-            <h3 className="text-2xl font-bold text-white mb-2">Edit Roster</h3>
-            <p className="text-purple-400 font-medium mb-6">{editingTeam.teamName}</p>
+        {/* ── Roster Modal ── */}
+        {editingTeam && (
+          <div className="md-modal-overlay">
+            <div className="md-modal">
 
-            {playersLoading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <div className="w-10 h-10 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-4"></div>
-                <p className="text-gray-400">Loading players...</p>
+              <div className="md-modal-hdr">
+                <div className="md-modal-hdr-l">
+                  <span className="md-modal-tag">ROSTER</span>
+                  <div>
+                    <div className="md-orb md-modal-title">Edit Roster</div>
+                    <div className="md-modal-team">{editingTeam.teamName}</div>
+                  </div>
+                </div>
+                <button className="md-modal-close" onClick={() => { setEditingTeam(null); setNewPlayerName(''); setNewPlayerId(''); setNewPlayerPhoto(null); }}>
+                  <FaTimes size={13} />
+                </button>
               </div>
-            ) : (
-              <>
-                {/* Two Column Layout */}
-                <div className="flex gap-6 flex-1 overflow-hidden mb-6">
-                  {/* Left Side - Current Players */}
-                  <div className="flex-1 flex flex-col">
-                    <h4 className="text-lg font-semibold text-white mb-4">Current Players</h4>
-                    <div className="flex-1 overflow-y-auto pr-2">
-                      <p className="text-sm text-gray-400 mb-4">Select 1-4 players:</p>
-                      <div className="space-y-2">
-                        {availablePlayers.map((player) => {
-                          const playerIdStr = player._id.toString();
-                          const isChecked = selectedPlayers.includes(playerIdStr);
-                          return (
-                            <label
-                              key={playerIdStr}
-                              className={`
-                                flex items-center p-3 rounded-lg border cursor-pointer transition-all
-                                ${isChecked
-                                  ? 'bg-purple-600/20 border-purple-500 text-white'
-                                  : 'bg-slate-900/50 border-slate-700 text-gray-400 hover:bg-slate-800'
-                                }
-                              `}
-                            >
-                              <div
-                                onClick={() => {
-                                  if (isChecked) {
-                                    console.log('Unchecked player id:', playerIdStr);
-                                    setSelectedPlayers(selectedPlayers.filter(id => id !== playerIdStr));
-                                  } else {
-                                    if (selectedPlayers.length >= 4) {
-                                      alert(t('matchData.pleaseUntickPlayer'));
-                                      return;
-                                    }
-                                    console.log('Checked player id:', playerIdStr);
-                                    setSelectedPlayers([...selectedPlayers, playerIdStr]);
-                                  }
-                                }}
-                                className={`w-5 h-5 rounded-md mr-3 flex items-center justify-center transition-all duration-200 cursor-pointer flex-shrink-0 ${isChecked ? 'bg-purple-600 shadow-[0_0_8px_rgba(147,51,234,0.5)]' : 'bg-slate-700 border border-slate-600 hover:border-slate-500'}`}
-                              >
-                                {isChecked && (
-                                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
-                                  </svg>
-                                )}
-                              </div>
-                              <span className="font-medium">{player.playerName}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Vertical Divider */}
-                  <div className="w-px bg-slate-700"></div>
-
-                  {/* Right Side - Add New Player */}
-                  <div className="flex-1 flex flex-col">
-                    <h4 className="text-lg font-semibold text-white mb-4">Add New Player</h4>
-                    <div className="flex-1 overflow-y-auto pr-2">
-                      <div className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-6">
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Player Name *</label>
-                            <input
-                              type="text"
-                              placeholder="Enter player name"
-                              value={newPlayerName}
-                              onChange={(e) => setNewPlayerName(e.target.value)}
-                              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                            />
+              {playersLoading ? (
+                <div className="md-player-loading">
+                  <div className="md-spinner" />
+                  <p className="md-spin-txt">LOADING PLAYERS</p>
+                </div>
+              ) : (
+                <div className="md-modal-body">
+                  {/* Left — player selection */}
+                  <div className="md-modal-col">
+                    <div className="md-orb md-modal-col-title">SELECT PLAYERS</div>
+                    <p className="md-sel-count">
+                      SELECTED <span>{selectedPlayers.length}</span> / 4
+                    </p>
+                    {availablePlayers.map(player => {
+                      const id = player._id.toString();
+                      const isSel = selectedPlayers.includes(id);
+                      return (
+                        <div
+                          key={id}
+                          className={`md-player-sel-row${isSel ? ' sel' : ''}`}
+                          onClick={() => {
+                            if (isSel) {
+                              setSelectedPlayers(prev => prev.filter(x => x !== id));
+                            } else {
+                              if (selectedPlayers.length >= 4) { alert(t('matchData.pleaseUntickPlayer')); return; }
+                              setSelectedPlayers(prev => [...prev, id]);
+                            }
+                          }}
+                        >
+                          <div className="md-check-box">
+                            {isSel && <FaCheck size={9} color="#000" />}
                           </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Player ID (Optional)</label>
-                            <input
-                              type="text"
-                              placeholder="Enter player ID"
-                              value={newPlayerId}
-                              onChange={(e) => setNewPlayerId(e.target.value)}
-                              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Player Photo</label>
-                            <label htmlFor="new-player-photo" className="flex items-center gap-2 px-4 py-3 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white cursor-pointer hover:bg-slate-800/50 focus-within:ring-2 focus-within:ring-purple-500 transition-all w-full">
-                              <FaUpload size={16} />
-                              Upload Player Photo
-                            </label>
-                            <input
-                              id="new-player-photo"
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => setNewPlayerPhoto(e.target.files?.[0] || null)}
-                              className="hidden"
-                            />
-                            {newPlayerPhoto && (
-                              <div className="mt-4 flex justify-center">
-                                <img
-                                  src={URL.createObjectURL(newPlayerPhoto)}
-                                  alt="Player Photo Preview"
-                                  className="w-32 h-32 object-cover rounded-lg border-2 border-slate-600 shadow-lg"
-                                  loading="lazy"
-                                />
-                              </div>
-                            )}
-                          </div>
-
-                          <button
-                            onClick={addNewPlayer}
-                            disabled={addingPlayer || !newPlayerName.trim()}
-                            className={`w-full px-4 py-3 rounded-lg font-medium text-white transition-all flex items-center justify-center gap-2 mt-4 ${addingPlayer || !newPlayerName.trim() ? 'bg-green-700 cursor-not-allowed opacity-60' : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-900/20'}`}
-                          >
-                            {addingPlayer ? (
-                              <>
-                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                Adding Player...
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
-                                </svg>
-                                Add Player 
-                              </>
-                            )}
-                          </button>
+                          <span className="md-sel-player-name">{player.playerName}</span>
                         </div>
-                      </div>
-                    </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="md-modal-divider" />
+
+                  {/* Right — add new player */}
+                  <div className="md-modal-col">
+                    <div className="md-orb md-modal-col-title">ADD NEW PLAYER</div>
+
+                    <p className="md-field-lbl">Player Name *</p>
+                    <input
+                      type="text" placeholder="Enter player name"
+                      value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)}
+                      className="md-add-input"
+                    />
+
+                    <p className="md-field-lbl">Player ID (Optional)</p>
+                    <input
+                      type="text" placeholder="Enter player ID"
+                      value={newPlayerId} onChange={e => setNewPlayerId(e.target.value)}
+                      className="md-add-input"
+                    />
+
+                    <p className="md-field-lbl">Player Photo</p>
+                    <label htmlFor="new-player-photo" className="md-upload-lbl">
+                      <FaUpload size={13} color="#4ade80" /> Upload Photo
+                    </label>
+                    <input id="new-player-photo" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => setNewPlayerPhoto(e.target.files?.[0] || null)} />
+                    {newPlayerPhoto && (
+                      <img src={URL.createObjectURL(newPlayerPhoto)} alt="Preview" className="md-photo-preview" loading="lazy" />
+                    )}
+
+                    <button
+                      className="md-add-btn"
+                      onClick={addNewPlayer}
+                      disabled={addingPlayer || !newPlayerName.trim()}
+                    >
+                      {addingPlayer
+                        ? <><span className="md-spinner-sm" /> Adding...</>
+                        : <><FaPlus size={10} /> Add Player</>
+                      }
+                    </button>
                   </div>
                 </div>
+              )}
 
-                {/* Bottom Action Buttons */}
-                <div className="flex justify-end gap-3 pt-6 border-t border-slate-700">
-                  <button
-                    onClick={() => {
-                      setEditingTeam(null);
-                      setNewPlayerName('');
-                      setNewPlayerId('');
-                      setNewPlayerPhoto(null);
-                    }}
-                    className="px-6 py-2.5 rounded-xl font-medium text-gray-300 bg-slate-700 hover:bg-slate-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={saveChangedPlayers}
-                    disabled={savingRoster}
-                    className={`px-6 py-2.5 rounded-xl font-medium text-white shadow-lg shadow-purple-900/20 transition-all flex items-center gap-2 ${savingRoster ? 'bg-purple-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
-                  >
-                    {savingRoster ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        Saving Roster...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        Save Roster
-                      </>
-                    )}
-                  </button>
-                </div>
-              </>
-            )}
+              <div className="md-modal-footer">
+                <button className="md-btn-cancel" onClick={() => { setEditingTeam(null); setNewPlayerName(''); setNewPlayerId(''); setNewPlayerPhoto(null); }}>
+                  Cancel
+                </button>
+                <button className="md-btn-save" onClick={saveChangedPlayers} disabled={savingRoster}>
+                  {savingRoster
+                    ? <><span className="md-spinner-sm" /> Saving...</>
+                    : <><FaCheck size={11} /> Save Roster</>
+                  }
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 };
 
 export default MatchDataViewer;
+  

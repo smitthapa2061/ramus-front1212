@@ -31,30 +31,7 @@ import Slots from '../Themes/Theme1/off-screen/slots.tsx'
 import RosterShowCase from '../Themes/Theme4/off-screen/RosterShowCase.tsx'
 import PlayerSwitch from '../Themes/Theme4/off-screen/PlayerSwitch.tsx'
 
-// Theme2 imports
-import Lower2 from '../Themes/Theme2/on-screen/Lower.tsx';
-import Upper2 from '../Themes/Theme2/on-screen/Upper.tsx';
-import Dom2 from '../Themes/Theme2/on-screen/Dom.tsx';
-import Alerts2 from '../Themes/Theme2/on-screen/Alerts.tsx';
-import LiveStats2 from '../Themes/Theme2/on-screen/LiveStats.tsx';
-import LiveFrags2 from '../Themes/Theme2/on-screen/LiveFrags.tsx';
-import MatchData2 from '../Themes/Theme2/off-screen/MatchData.tsx';
-import MatchFragrs2 from '../Themes/Theme2/off-screen/MatchFragrs.tsx';
-import WwcdSummary2 from '../Themes/Theme2/off-screen/WwcdSummary.tsx';
-import WwcdStats2 from '../Themes/Theme2/off-screen/WwcdStats.tsx'
-import OverallData2 from   '../Themes/Theme2/off-screen/OverAllData.tsx'
-import OverallFrags2 from '../Themes/Theme2/off-screen/OverallFrags.tsx'
-import Schedule2 from '../Themes/Theme2/off-screen/Schedule.tsx'
-import CommingUpNext2 from '../Themes/Theme2/off-screen/CommingUpNext.tsx'
-import Champions2 from '../Themes/Theme2/off-screen/Champions.tsx'
-import FirstRunnerUp2 from '../Themes/Theme2/off-screen/1stRunnerUp.tsx'
-import SecondRunnerUp2 from '../Themes/Theme2/off-screen/2ndRunnerUp.tsx'
-import EventMvp2 from '../Themes/Theme2/off-screen/EventMvp.tsx'
-import MatchSummary2 from '../Themes/Theme2/off-screen/MatchSummary.tsx'
-import PlayerH2H2 from '../Themes/Theme2/off-screen/playerh2h.tsx'
-import TeamH2H2 from '../Themes/Theme2/off-screen/teamh2h.tsx'
-import ZoneClose2 from '../Themes/Theme2/on-screen/zoneClose.tsx'
-import Slots2 from '../Themes/Theme2/off-screen/slots.tsx'
+// Theme2 imports removed
 
 // Theme3 imports
 import Lower3 from '../Themes/Theme3/on-screen/Lower.tsx';
@@ -255,38 +232,7 @@ const PublicThemeRenderer: React.FC = () => {
       HighlightSchedule: Schedule,
       RosterShowCase: RosterShowCase,
     },
-    Theme2: {
-      Lower: Lower2,
-      Upper: Upper2,
-      Dom: Dom2,
-      Alerts: Alerts2,
-      LiveStats: LiveStats2,
-      LiveFrags: LiveFrags2,
-      MatchData: MatchData2,
-      MatchFragrs: MatchFragrs2,
-      WwcdSummary: WwcdSummary2,
-      WwcdStats: WwcdStats2,
-      OverallData: OverallData2,
-      OverallFrags: OverallFrags2,
-      Schedule: Schedule2,
-      CommingUpNext: CommingUpNext2,
-      Champions: Champions2,
-      FirstRunnerUp: FirstRunnerUp2,
-      SecondRunnerUp: SecondRunnerUp2,
-      EventMvp: EventMvp2,
-      MatchSummary: MatchSummary2,
-      PlayerH2H: PlayerH2H2,
-      TeamH2H: TeamH2H2,
-      ZoneClose: ZoneClose2,
-      Intro: Intro, // Use Theme1's Intro for Theme2
-      MapPreview: MapPreview, // Use Theme1's MapPreview for Theme2
-      Slots: Slots2,
-      Mvp: MatchFragrs2,
-      HighlightPoints: OverallData2,
-      HighlightSchedule: Schedule2,
-      RosterShowCase: RosterShowCase,
-      PlayerSwitch: null,
-    },
+    
     Theme3: {
       Lower: Lower3,
       Upper: Upper3,
@@ -386,7 +332,7 @@ const PublicThemeRenderer: React.FC = () => {
     },
   };
 
-  const activeTheme = themes[theme as 'Theme1' | 'Theme2' | 'Theme3' | 'Theme4' | 'Theme5'] || themes['Theme1'];
+  const activeTheme = themes[theme as 'Theme1'  | 'Theme3' | 'Theme4' | 'Theme5'] || themes['Theme1'];
 
   const {
     Lower: LowerComp,
@@ -442,7 +388,7 @@ const PublicThemeRenderer: React.FC = () => {
         setLoading(true);
 
         // Determine what data is needed based on the view
-        const needsOverallData = ['OverAllData', 'OverallFrags', 'LiveStats', '1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'highlightPoints'].includes(view);
+        const needsOverallData = ['OverAllData', 'OverallFrags',  '1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'highlightPoints'].includes(view);
         const needsMatches = ['OverAllData', 'Schedule', 'Lower', 'highlightPoints', 'HighlightSchedule', 'OverallFrags'].includes(view);
         const needsMatchDatas = ['OverAllData', 'Schedule', 'highlightPoints', 'HighlightSchedule', 'OverallFrags'].includes(view);
         const needsOverallWithMatch = false; // OverallFrags uses round-level overall data, not match-specific
