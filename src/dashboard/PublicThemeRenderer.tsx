@@ -123,6 +123,39 @@ import RosterShowCase5 from '../Themes/Theme5/off-screen/RosterShowCase.tsx'
 import PlayerSwitch5 from '../Themes/Theme5/off-screen/PlayerSwitch.tsx'
 import TopFragger5 from '../Themes/Theme5/off-screen/TopFragger.tsx'
 
+// Theme6 imports
+import Lower6 from '../Themes/Theme6/on-screen/Lower.tsx';
+import Upper6 from '../Themes/Theme6/on-screen/Upper.tsx';
+import Dom6 from '../Themes/Theme6/on-screen/Dom.tsx';
+import Alerts6 from '../Themes/Theme6/on-screen/Alerts.tsx';
+import LiveStats6 from '../Themes/Theme6/on-screen/LiveStats.tsx';
+import LiveFrags6 from '../Themes/Theme6/on-screen/LiveFrags.tsx';
+import MatchData6 from '../Themes/Theme6/off-screen/MatchData.tsx';
+import MatchFragrs6 from '../Themes/Theme6/off-screen/MatchFragrs.tsx';
+import WwcdSummary6 from '../Themes/Theme6/off-screen/WwcdSummary.tsx';
+import WwcdStats6 from '../Themes/Theme6/off-screen/WwcdStats.tsx'
+import OverallData6 from   '../Themes/Theme6/off-screen/OverAllData.tsx'
+import OverallFrags6 from '../Themes/Theme6/off-screen/OverallFrags.tsx'
+import Schedule6 from '../Themes/Theme6/off-screen/Schedule.tsx'
+import CommingUpNext6 from '../Themes/Theme6/off-screen/CommingUpNext.tsx'
+import Champions6 from '../Themes/Theme6/off-screen/Champions.tsx'
+import FirstRunnerUp6 from '../Themes/Theme6/off-screen/1stRunnerUp.tsx'
+import SecondRunnerUp6 from '../Themes/Theme6/off-screen/2ndRunnerUp.tsx'
+import EventMvp6 from '../Themes/Theme6/off-screen/EventMvp.tsx'
+import MatchSummary6 from '../Themes/Theme6/off-screen/MatchSummary.tsx'
+import PlayerH2H6 from '../Themes/Theme6/off-screen/playerh2h.tsx'
+import TeamH2H6 from '../Themes/Theme6/off-screen/teamh2h.tsx'
+import ZoneClose6 from '../Themes/Theme6/on-screen/zoneClose.tsx'
+import Intro6 from '../Themes/Theme6/on-screen/intro.tsx'
+import MapPreview6 from '../Themes/Theme6/off-screen/mapPreview.tsx'
+import Slots6 from '../Themes/Theme6/off-screen/slots.tsx'
+import Mvp6 from '../Themes/Theme6/off-screen/mvp.tsx'
+import HighlightPoints6 from '../Themes/Theme6/off-screen/HighlightPoints.tsx'
+import HighlightSchedule6 from '../Themes/Theme6/off-screen/HighlightSchedule.tsx'
+import RosterShowCase6 from '../Themes/Theme6/off-screen/RosterShowCase.tsx'
+import PlayerSwitch6 from '../Themes/Theme6/off-screen/PlayerSwitch.tsx'
+import TopFragger6 from '../Themes/Theme6/off-screen/TopFragger.tsx'
+
 
 interface Tournament {
   _id: string;
@@ -146,6 +179,7 @@ interface Match {
   matchName?: string;
   matchNo?: number;
   _matchNo?: number;
+  groups?: string[];
 }
 
 interface MatchData {
@@ -330,9 +364,42 @@ const PublicThemeRenderer: React.FC = () => {
       PlayerSwitch: PlayerSwitch5,
       TopFragger: TopFragger5,
     },
+    Theme6: {
+      Lower: Lower6,
+      Upper: Upper6,
+      Dom: Dom6,
+      Alerts: Alerts6,
+      LiveStats: LiveStats6,
+      LiveFrags: LiveFrags6,
+      MatchData: MatchData6,
+      MatchFragrs: MatchFragrs6,
+      WwcdSummary: WwcdSummary6,
+      WwcdStats: WwcdStats6,
+      OverallData: OverallData6,
+      OverallFrags: OverallFrags6,
+      Schedule: Schedule6,
+      CommingUpNext: CommingUpNext6,
+      Champions: Champions6,
+      FirstRunnerUp: FirstRunnerUp6,
+      SecondRunnerUp: SecondRunnerUp6,
+      EventMvp: EventMvp6,
+      MatchSummary: MatchSummary6,
+      PlayerH2H: PlayerH2H6,
+      TeamH2H: TeamH2H6,
+      ZoneClose: ZoneClose6,
+      Intro: Intro6,
+      MapPreview: MapPreview6,
+      Slots: Slots6,
+      Mvp: Mvp6,
+      HighlightPoints: HighlightPoints6,
+      HighlightSchedule: HighlightSchedule6,
+      RosterShowCase: RosterShowCase6,
+      PlayerSwitch: PlayerSwitch6,
+      TopFragger: TopFragger6,
+    },
   };
+const activeTheme = themes[theme as 'Theme1'  | 'Theme3' | 'Theme4' | 'Theme5' | 'Theme6'] || themes['Theme1'];
 
-  const activeTheme = themes[theme as 'Theme1'  | 'Theme3' | 'Theme4' | 'Theme5'] || themes['Theme1'];
 
   const {
     Lower: LowerComp,
@@ -388,8 +455,8 @@ const PublicThemeRenderer: React.FC = () => {
         setLoading(true);
 
         // Determine what data is needed based on the view
-        const needsOverallData = ['OverAllData', 'OverallFrags',  '1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'highlightPoints'].includes(view);
-        const needsMatches = ['OverAllData', 'Schedule', 'Lower', 'highlightPoints', 'HighlightSchedule', 'OverallFrags'].includes(view);
+        const needsOverallData = ['OverAllData', 'OverallFrags', 'LiveStats', '1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'highlightPoints'].includes(view);
+        const needsMatches = true;
         const needsMatchDatas = ['OverAllData', 'Schedule', 'highlightPoints', 'HighlightSchedule', 'OverallFrags'].includes(view);
         const needsOverallWithMatch = false; // OverallFrags uses round-level overall data, not match-specific
         const needsMatchData = ['Upper', 'Dom', 'Alerts', 'LiveStats', 'LiveFrags', 'MatchData', 'MatchFragrs', 'WwcdSummary', 'WwcdStats', 'playerH2H', 'mapPreview', 'slots', 'TeamH2H', 'mvp', 'RosterShowCase', 'MatchSummary', 'Champions','1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'PlayerSwitch'].includes(view);
@@ -405,9 +472,9 @@ const PublicThemeRenderer: React.FC = () => {
           basePromises.push(api.get(`public/tournaments/${tournamentId}/rounds/${roundId}/selected-match`).catch(() => null));
         }
 
-        if (needsMatches) {
-          basePromises.push(api.get(`public/rounds/${roundId}/matches`));
-        }
+        const groupsPromise = api.get(`public/tournaments/${tournamentId}/groups`);
+        const matchesPromise = api.get(`public/rounds/${roundId}/matches`);
+        basePromises.push(groupsPromise, matchesPromise);
 
         const baseResults = await Promise.all(basePromises);
         const tournamentData = baseResults[0].data;
@@ -417,16 +484,33 @@ const PublicThemeRenderer: React.FC = () => {
         setRound(roundData);
 
         let selectedMatchResponse = null;
+        let groupsResponse = null;
         let matchesResponse = null;
 
         if (followSelected) {
           selectedMatchResponse = baseResults[2];
         }
 
-        if (needsMatches) {
-          matchesResponse = baseResults[followSelected ? 3 : 2];
-          setMatches(matchesResponse.data);
-        }
+        groupsResponse = baseResults[followSelected ? 3 : 2];
+        matchesResponse = baseResults[followSelected ? 4 : 3];
+        const rawMatches = matchesResponse.data;
+        // Create map from group ID to groupName
+        const groupMap = new Map();
+        groupsResponse.data.forEach((group: any) => {
+          groupMap.set(group._id, group.groupName);
+        });
+        // Attach full groupNames array to each match for multi-group support
+        const enrichedMatches = rawMatches.map((match: any) => {
+          if (match.groups && match.groups.length > 0) {
+            match.groupName = groupMap.get(match.groups[0]) || 'Unknown'; // Legacy single
+            match.groupNames = match.groups.slice(0,2).map((id: string) => groupMap.get(id) || 'Unknown').filter(Boolean); // Dynamic array
+          } else {
+            match.groupName = 'Unknown';
+            match.groupNames = [];
+          }
+          return match;
+        });
+        setMatches(enrichedMatches);
 
         // Resolve effective matchId
         let effectiveMatchId = matchId;
@@ -561,7 +645,7 @@ const PublicThemeRenderer: React.FC = () => {
     // Pass tournament data to the appropriate component
     switch (view) {
       case 'Lower':
-        return <LowerComp tournament={tournament} round={round} match={match} totalMatches={matches.length} />;
+        return <LowerComp tournament={tournament} round={round} match={match} totalMatches={matches.length} matches={matches} />;
       case 'Upper':
         return <UpperComp tournament={tournament} round={round} match={match} matchData={matchData} backpackInfo={backpackInfo} />;
       case 'Dom':

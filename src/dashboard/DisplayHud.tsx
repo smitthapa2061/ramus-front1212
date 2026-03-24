@@ -12,7 +12,7 @@ interface Tournament { _id: string; tournamentName: string; }
 interface Round       { _id: string; roundName: string; }
 interface Match       { _id: string; matchName?: string; matchNo?: number; _matchNo?: number; }
 
-const THEMES = ['Theme1', 'Theme2', 'Theme3', 'Theme4', 'Theme5'];
+const THEMES = ['Theme1', 'Theme2', 'Theme3', 'Theme4', 'Theme5', 'Theme6'];
 
 // Each view group: icon char, label, accent color, views with short display labels
 const VIEW_GROUPS = [
@@ -143,8 +143,16 @@ const STYLES = `
   /* Polling strip inside nav */
   .hd-poll-row {
     display: flex; align-items: center; gap: 7px; margin-top: 10px;
-    padding: 7px 10px; border-radius: 7px;
-    background: rgba(74,222,128,0.05); border: 1px solid rgba(74,222,128,0.12);
+    padding: 8px 12px; border-radius: 8px;
+    background: rgba(74,222,128,0.12);
+    border: 1px solid rgba(74,222,128,0.25);
+    box-shadow: 0 0 8px rgba(74,222,128,0.15);
+    position: relative; z-index: 10;
+    transition: all 0.2s ease;
+  }
+  .hd-poll-row:hover {
+    background: rgba(74,222,128,0.2);
+    box-shadow: 0 0 15px rgba(74,222,128,0.3);
   }
   .hd-poll-dot { width: 5px; height: 5px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 4px #4ade80; animation: hd-blink 2s ease-in-out infinite; }
   @keyframes hd-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
@@ -520,7 +528,7 @@ const DisplayHud: React.FC = () => {
             <div className="hd-orb hd-nav-heading">HUD CTRL</div>
             <div className="hd-poll-row">
               <div className="hd-poll-dot" />
-              <span className="hd-orb hd-poll-txt">LIVE SYNC</span>
+              
               <PollingManager key={pollingKey} />
             </div>
           </div>

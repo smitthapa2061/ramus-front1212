@@ -421,7 +421,7 @@ const Group = React.forwardRef<GroupRef, GroupProps>(({ onSelectionChange }, ref
   const openFormForEditGroup = async (group: Group) => {
     await fetchTeams();
     if (groupNameRef.current) groupNameRef.current.value = group.groupName;
-    setSelectedTeams(group.slots?.map(s => ({ teamId: s.team._id, slot: s.slot })) || []);
+    setSelectedTeams((group.slots || []).filter((s): s is Slot & {team: Team} => !!s.team).map(s => ({ teamId: s.team._id, slot: s.slot })));
     setEditingGroupId(group._id);
     setShowForm(true);
   };

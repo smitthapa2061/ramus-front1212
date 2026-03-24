@@ -209,11 +209,11 @@ const LiveFrags: React.FC<LiveFragsProps> = ({ tournament, round, match, matchDa
               teams: prev.teams.map((team: any) => {
                 // Check both _id and teamId for team matching
                 if (team._id === data.teamId || team.teamId === data.teamId) {
-                  // Update all player fields if provided, including liveState, bHasDied, health, etc.
+                  // Update player kill numbers if provided
                   const updatedPlayers = data.players ?
                     team.players.map((player: any) => {
                       const playerUpdate = data.players.find((p: any) => p._id === player._id);
-                      return playerUpdate ? { ...player, ...playerUpdate } : player;
+                      return playerUpdate ? { ...player, killNum: playerUpdate.killNum } : player;
                     }) : team.players;
 
                   return {
@@ -386,7 +386,7 @@ const LiveFrags: React.FC<LiveFragsProps> = ({ tournament, round, match, matchDa
 
             return (
               <div
-                key={player._id}
+                key={String(player._id)}
                 className="  flex items-center "
                 style={{
                   background: `linear-gradient(135deg, ${tournament.primaryColor || '#333'}, ${tournament.secondaryColor || '#666'})`,
@@ -401,7 +401,7 @@ const LiveFrags: React.FC<LiveFragsProps> = ({ tournament, round, match, matchDa
                 {/* Player Avatar */}
                 <div className="w-[100px] h-[100px] ">
                   <img
-                    src={player.picUrl || '/def_char.png'}
+                    src={player.picUrl || './def_char.png'}
                     alt={player.playerName}
                     className="w-full h-full "
                   />

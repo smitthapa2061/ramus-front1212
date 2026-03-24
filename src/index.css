@@ -34,7 +34,7 @@
 /* New Awaking font */
 @font-face {
     font-family: "Unisans";
-    src: url("./assets/fonts/Unisans.otf") format("opentype");
+    src: url("./assets/fonts/Unisans.woff2") format("woff2");
     font-weight: normal;
     font-style: normal;
     font-display: swap;
@@ -61,7 +61,7 @@
 
 @font-face {
   font-family: "AGENCYB";
-  src: url("./assets/fonts/AGENCYB.TTF") format("truetype");
+  src: url("./assets/fonts/AGENCYB.woff2") format("woff2");
   font-weight: 700;   /* IMPORTANT */
   font-style: normal; /* IMPORTANT */
   font-display: swap;
