@@ -149,6 +149,7 @@ import ZoneClose6 from '../Themes/Theme6/on-screen/zoneClose.tsx'
 import Intro6 from '../Themes/Theme6/on-screen/intro.tsx'
 import MapPreview6 from '../Themes/Theme6/off-screen/mapPreview.tsx'
 import Slots6 from '../Themes/Theme6/off-screen/slots.tsx'
+import Achive6 from '../Themes/Theme6/on-screen/Achive.tsx'
 import Mvp6 from '../Themes/Theme6/off-screen/mvp.tsx'
 import HighlightPoints6 from '../Themes/Theme6/off-screen/HighlightPoints.tsx'
 import HighlightSchedule6 from '../Themes/Theme6/off-screen/HighlightSchedule.tsx'
@@ -390,6 +391,7 @@ const PublicThemeRenderer: React.FC = () => {
       Intro: Intro6,
       MapPreview: MapPreview6,
       Slots: Slots6,
+      achive: Achive6, 
       Mvp: Mvp6,
       HighlightPoints: HighlightPoints6,
       HighlightSchedule: HighlightSchedule6,
@@ -428,6 +430,7 @@ const activeTheme = themes[theme as 'Theme1'  | 'Theme3' | 'Theme4' | 'Theme5' |
     MapPreview: MapPreviewComp,
     Slots: SlotsComp,
     Mvp: MvpComp,
+      achive: AchiveComp,
     HighlightPoints: HighlightPointsComp,
     HighlightSchedule: HighlightScheduleComp,
     RosterShowCase: RosterShowCaseComp,
@@ -457,10 +460,10 @@ const activeTheme = themes[theme as 'Theme1'  | 'Theme3' | 'Theme4' | 'Theme5' |
         // Determine what data is needed based on the view
         const needsOverallData = ['OverAllData', 'OverallFrags', 'LiveStats', '1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'highlightPoints'].includes(view);
         const needsMatches = true;
-        const needsMatchDatas = ['OverAllData', 'Schedule', 'highlightPoints', 'HighlightSchedule', 'OverallFrags'].includes(view);
+        const needsMatchDatas = [ 'Schedule', 'highlightPoints', 'HighlightSchedule'].includes(view);
         const needsOverallWithMatch = false; // OverallFrags uses round-level overall data, not match-specific
-        const needsMatchData = ['Upper', 'Dom', 'Alerts', 'LiveStats', 'LiveFrags', 'MatchData', 'MatchFragrs', 'WwcdSummary', 'WwcdStats', 'playerH2H', 'mapPreview', 'slots', 'TeamH2H', 'mvp', 'RosterShowCase', 'MatchSummary', 'Champions','1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'PlayerSwitch'].includes(view);
-        const needsBackpackInfo = ['MatchSummary', 'Upper', 'mvp'].includes(view);
+        const needsMatchData = ['Upper', 'Dom', 'Alerts', 'LiveStats', 'LiveFrags', 'MatchData', 'Achive','MatchFragrs', 'WwcdSummary', 'WwcdStats', 'playerH2H', 'mapPreview', 'slots', 'TeamH2H', 'mvp', 'RosterShowCase', 'MatchSummary', 'Champions','1stRunnerUp', '2ndRunnerUp', 'EventMvp', 'PlayerSwitch'].includes(view);
+        const needsBackpackInfo = [ 'Upper',].includes(view);
 
         // Always fetch basic data
         const basePromises: Promise<any>[] = [
@@ -650,6 +653,9 @@ const activeTheme = themes[theme as 'Theme1'  | 'Theme3' | 'Theme4' | 'Theme5' |
         return <UpperComp tournament={tournament} round={round} match={match} matchData={matchData} backpackInfo={backpackInfo} />;
       case 'Dom':
         return <DomComp tournament={tournament} round={round} match={match} matchData={matchData} />;
+      case 'Achive':
+      case 'achive':
+        return <AchiveComp tournament={tournament} round={round} match={match} matchData={matchData} />;
       case 'Alerts':
         return <AlertsComp tournament={tournament} round={round} match={match} matchData={matchData} />;
       case 'LiveStats':
@@ -681,7 +687,7 @@ const activeTheme = themes[theme as 'Theme1'  | 'Theme3' | 'Theme4' | 'Theme5' |
         case 'EventMvp':
           return <EventMvpComp tournament={tournament} round={round} overallData={overallData} />
         case 'MatchSummary':
-          return <MatchSummaryComp tournament={tournament} round={round} match={match} matchDataId={matchData?._id} backpackInfo={backpackInfo} />
+          return <MatchSummaryComp tournament={tournament} round={round} match={match}   matchData={matchData} />
         case 'playerH2H':
           return <PlayerH2HComp tournament={tournament} round={round} match={match} matchData={matchData} />
         case 'TeamH2H':

@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
+// src/components/OverAllDataComponent.tsx
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 
 interface Tournament {
@@ -19,6 +20,7 @@ interface Round {
 
 interface Player {
   _id: string;
+  picUrl?: string;
   playerName: string;
   killNum: number;
 }
@@ -32,12 +34,11 @@ interface Team {
   placePoints: number;
   wwcd?: number;
   players: Player[];
-  matchesPlayed?: number;
   totalKills?: number;
   total?: number;
   rank?: number;
-  pointsChange?: number; // points gained this match
-  leadOverNext?: number; // only for rank 1: lead over rank 2
+  pointsChange?: number;
+  leadOverNext?: number;
 }
 
 interface OverallData {
@@ -48,245 +49,275 @@ interface OverallData {
   createdAt: string;
 }
 
-interface Match {
-  _id: string;
-  matchName?: string;
-  matchNo?: number;
-}
-
-interface MatchData {
-  _id: string;
-  teams: Team[];
-}
-
 interface OverAllDataProps {
   tournament: Tournament;
   round?: Round | null;
-  match?: Match | null;
-  matchData?: MatchData | null;
   overallData?: OverallData | null;
-  matches?: Match[];
-  matchDatas?: MatchData[];
 }
 
-
-
-// ... all imports and interfaces remain the same
-
-const OverAllDataComponent: React.FC<OverAllDataProps> = ({ tournament, round, match, matchData, overallData: propOverallData, matches: propMatches, matchDatas: propMatchDatas }) => {
+const OverAllDataComponent: React.FC<OverAllDataProps> = ({
+  tournament,
+  round,
+  overallData: propOverallData,
+}) => {
+  // ✅ Hooks at the top
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [previousTotals, setPreviousTotals] = useState<Map<string, number>>(new Map());
+const previousTotalsRef = useRef<Map<string, number>>(new Map());
   const [processedOverallData, setProcessedOverallData] = useState<OverallData | null>(null);
-
-  const overallData = propOverallData;
-  const matches = propMatches || [];
-  const matchDatas = propMatchDatas || [];
-
-  useEffect(() => {
-    if (overallData) {
-      // Calculate matches played for each team
-      const teamMatchesPlayed = new Map<string, number>();
-      // Always count the selected match
-      if (matchData) {
-        const hasTenPlacePoints = matchData.teams.some((team: any) => team.placePoints === 10);
-        if (hasTenPlacePoints) {
-          matchData.teams.forEach((team: any) => {
-            if (team.players && team.players.length > 0) {
-              const teamId = team.teamId;
-              teamMatchesPlayed.set(teamId, (teamMatchesPlayed.get(teamId) || 0) + 1);
-            }
-          });
-        }
-      }
-      // Count other matches
-      matchDatas.forEach((matchDataItem) => {
-        if (matchData && matchDataItem._id === matchData._id) return; // Skip if it's the selected match
-        const hasTenPlacePoints = matchDataItem.teams.some((team: any) => team.placePoints === 10);
-        if (hasTenPlacePoints) {
-          matchDataItem.teams.forEach((team: any) => {
-            if (team.players && team.players.length > 0) {
-              const teamId = team.teamId;
-              teamMatchesPlayed.set(teamId, (teamMatchesPlayed.get(teamId) || 0) + 1);
-            }
-          });
-        }
-      });
-
-      // Update totals and calculate additional fields
-      const updatedTeams = overallData.teams.map((team: any) => {
-        const totalKills = team.players.reduce((sum: number, p: any) => sum + (p.killNum || 0), 0);
-        const total = totalKills + team.placePoints;
-        const matchesPlayed = teamMatchesPlayed.get(team.teamId) || 0;
-        return {
-          ...team,
-          totalKills,
-          total,
-          matchesPlayed,
-        };
-      });
-
-      // Sort by total descending
-      updatedTeams.sort((a: any, b: any) => {
-        if (b.total !== a.total) return b.total - a.total;
-        if (b.placePoints !== a.placePoints) return b.placePoints - a.placePoints;
-          if ((b.wwcd || 0) !== (a.wwcd || 0)) return (b.wwcd || 0) - (a.wwcd || 0); // 3️⃣ tie → higher WWCD first
-  return (b.totalKills || 0) - (a.totalKills || 0);
-      });
-
-      // Calculate pointsChange and leadOverNext
-      const newTotals = new Map<string, number>();
-      updatedTeams.forEach((team: any, index: number) => {
-        team.rank = index + 1;
-        const prevTotal = previousTotals.get(team.teamId) || 0;
-        team.pointsChange = team.total - prevTotal;
-
-        // leadOverNext for all teams: difference to next rank
-        if (index < updatedTeams.length - 1) {
-          const nextTeam = updatedTeams[index + 1];
-          team.leadOverNext = team.total - nextTeam.total;
-        } else {
-          team.leadOverNext = 0; // last place has no next
-        }
-
-        newTotals.set(team.teamId, team.total);
-      });
-
-      setPreviousTotals(newTotals);
-      setProcessedOverallData({ ...overallData, teams: updatedTeams });
-      setLoading(false);
-    } else {
-      setLoading(false);
-    }
-  }, [overallData, previousTotals, matches]);
-
-  // Pagination - Show 2, 3, 4, etc. teams per page
   const [currentPage, setCurrentPage] = useState(0);
   const teamsPerPage = 8;
+
+  // Pagination logic
   const totalPages = processedOverallData && processedOverallData.teams.length > 16 ? 2 : 1;
 
   useEffect(() => {
+    if (totalPages <= 1) return;
     const interval = setInterval(() => {
-      setCurrentPage(prev => (prev + 1) % totalPages);
+      setCurrentPage((prev) => (prev + 1) % totalPages);
     }, 25000);
     return () => clearInterval(interval);
   }, [totalPages]);
+
+  // Process overall data
+  useEffect(() => {
+    if (!propOverallData) {
+      setLoading(false);
+      return;
+    }
+
+    const updatedTeams = propOverallData.teams.map((team) => {
+      const totalKills = team.players.reduce((sum, p) => sum + (p.killNum || 0), 0);
+      const total = totalKills + team.placePoints;
+      return { ...team, totalKills, total };
+    });
+
+    // Sorting
+    updatedTeams.sort((a, b) => {
+      if (b.total !== a.total) return b.total - a.total;
+      if (b.placePoints !== a.placePoints) return b.placePoints - a.placePoints;
+      if ((b.wwcd || 0) !== (a.wwcd || 0)) return (b.wwcd || 0) - (a.wwcd || 0);
+      return (b.totalKills || 0) - (a.totalKills || 0);
+    });
+
+    // Ranking + pointsChange + leadOverNext
+    updatedTeams.forEach((team, index) => {
+      team.rank = index + 1;
+      const prevTotal = previousTotalsRef.current.get(team.teamId) || 0;
+      team.pointsChange = team.total - prevTotal;
+      team.leadOverNext =
+        index < updatedTeams.length - 1
+          ? team.total - updatedTeams[index + 1].total
+          : 0;
+    });
+
+    setProcessedOverallData({ ...propOverallData, teams: updatedTeams });
+    setLoading(false);
+  }, [propOverallData]);
+
+// Update previousTotals after processing data
+  useEffect(() => {
+    if (processedOverallData) {
+      processedOverallData.teams.forEach((team) => {
+previousTotalsRef.current.set(team.teamId, team.total ?? 0);      });
+    }
+  }, [processedOverallData]);
 
   const paginatedTeams = useMemo(() => {
     if (!processedOverallData) return [];
     const start = currentPage * teamsPerPage;
     return processedOverallData.teams.slice(start, start + teamsPerPage);
-  }, [processedOverallData, currentPage, teamsPerPage]);
+  }, [processedOverallData, currentPage]);
 
   if (loading) return <div></div>;
-  if (error || !processedOverallData) return <div>{error || 'No data available'}</div>;
+  if (!processedOverallData) return <div>No data available</div>;
 
-  // Prepare data for the new design
-  const formattedData = processedOverallData.teams.map((team: any) => ({
-    ColumnA: team.teamname || team.teamName || null,
-    ColumnB: team.teamLogo || "/def_logo.avif",
-    ColumnC: team.players.reduce((s: number, p: any) => s + (p.killNum || 0), 0),
-    ColumnD: team.placePoints || 0,
-    ColumnE: team.wwcd || 0,
-    ColumnF: team.total || 0,
-  }));
-
-  const top20 = [formattedData.slice(0, 11), formattedData.slice(11, 22)];
-
+  // ✅ JSX unchanged
   return (
-    <div className="w-[1920px] h-[1080px] text-black">
-      {/* Title */}
-      <div
-        className="px-6 py-2 font-[Awaking] text-[160px] leading-[1] absolute top-[0px] left-[400px] font-[700] w-[1300px] text-center text-white tracking-wider"
-        style={{
-          backgroundImage: `linear-gradient(to right, ${tournament.primaryColor || '#6b21a8'}, ${tournament.secondaryColor || '#c084fc'})`,
-          clipPath: "polygon(40px 0%, 100% 0%, calc(100% - 40px) 100%, 0% 100%)",
-        }}
-      >
-        OVERALL STANDINGS
-      </div>
+    <div className="w-[1920px] h-[1080px] text-white p-8 ">
+      {/* TITLE */}
+      <div className="w-full h-[30%]">
+        <div className="px-6 py-2 font-[Awaking] tracking-wide text-[160px] absolute top-[30px] left-[190px] font-[700] bg-gradient-to-l from-[#ffa300] to-[#f9df67] text-transparent bg-clip-text scale-y-[1.4]">
+          OVERALL STANDINGS
+        </div>
 
-      {/* Info Strip */}
-      <div
-        className="w-[2000px] h-[60px] absolute left-[0px] top-[240px] text-white font-[tungsten] font-[100] text-[3rem] tracking-wide flex justify-center"
-      >
-        <div className="relative top-[-60px] left-[0px] text-[5rem]">
-          <span style={{ color: tournament.primaryColor || '#6b21a8' }}>{tournament.tournamentName}</span>
+        <div
+          style={{
+            backgroundImage: `linear-gradient(to left, transparent, ${tournament.primaryColor})`,
+            clipPath: 'polygon(30px 0%, 100% 0%, 100% 100%, 30px 100%, 0% 50%)',
+          }}
+          className="w-[1000px] h-[50px] absolute left-[200px] top-[280px] text-white font-[AGENCYB] text-[2.5rem]"
+        >
+          <div className="relative top-[-5px] left-[50px]">
+            {tournament.tournamentName} - {round?.roundName}
+          </div>
         </div>
       </div>
 
-      {/* Tables */}
-      <div className="flex gap-10 absolute top-[330px] left-[120px]">
-        {top20.map((tableData, tableIndex) => (
-          <div key={tableIndex}>
-            {/* Header */}
-            <div
-              style={{
-                backgroundImage: `linear-gradient(to left, ${tournament.secondaryColor || '#c084fc'}, ${tournament.primaryColor || '#6b21a8'})`,
-              }}
-              className="w-[840px] h-[40px] bg-white text-white flex text-[24px] font-[supermolot] mb-2 px-9 items-center">
-              <div className="w-[50px]">#</div>
-              <div className="w-[250px]">TEAM NAME</div>
-              <div className="w-[100px] text-center ml-[30px]">PLACE</div>
-              <div className="w-[100px] text-center">KILLS</div>
-              <div className="w-[100px] text-center">TOTAL</div>
-              <div className="w-[100px] text-center">WWCD</div>
+      {/* HEADER */}
+      <div className="flex">
+        {[0, 1].map((col) => (
+          <div
+            key={col}
+            className={`w-[850px] text-black text-[1.8rem] bg-white h-[40px] relative mb-[0px] font-[Agencyb] pl-[30PX] font-[900] top-[300px] ${
+              col === 1 ? 'left-[60px]' : 'left-[30px]'
+            }`}
+          >
+            <div className="absolute top-[-1px] w-[800px] flex gap-[80px]">
+              <div>#</div>
+              <div className="">TEAM</div>
+              <div className="ml-[110px]">WWCD</div>
+              <div className="ml-[-10px]">PLACE</div>
+              <div className="ml-[-5px]">KILLS</div>
+              <div className="ml-[-7px]">TOTAL</div>
             </div>
-
-            {/* Rows */}
-            {tableData.map((row, i) => {
-              const globalIndex = tableIndex * 11 + i;
-              const bgColor = globalIndex % 2 === 0 ? "#3a3a3a" : "#2e2e2e";
-
-              return (
-                <motion.div
-                  key={`team-${globalIndex}`}
-                  className="w-[840px] h-[60px] mb-2"
-                  initial={{ opacity: 0, y: 50 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: i * 0.1 }}
-                >
-                  <div
-                    className="flex items-center h-full px-4 font-[AGENCYB] text-white"
-                    style={{ backgroundColor: bgColor }}
-                  >
-                    <div className="w-[50px] text-[26px] font-[AGENCYB] text-center">
-                      {globalIndex + 1}
-                    </div>
-
-                    <img
-                      src={row.ColumnB}
-                      alt="logo"
-                      className="h-[40px] w-[40px] object-contain ml-1"
-                    />
-
-                    <div
-                      className="w-[250px] h-[40px] ml-2 flex items-center pl-2 text-[26px] bg-white text-black "
-                    >
-                      {row.ColumnA}
-                    </div>
-
-                    <div className="w-[100px] text-center text-[26px] font-[AGENCYB]">{row.ColumnD}</div>
-                    <div className="w-[100px] text-center text-[26px] font-[AGENCYB]">{row.ColumnC}</div>
-                    <div className="w-[100px] text-center text-[26px] font-[AGENCYB]">{row.ColumnF}</div>
-                    <div className="w-[100px] text-center text-[26px] font-[AGENCYB] flex items-center justify-center gap-1">
-                      <img
-                        src="/chicken.avif"
-                        className="w-[30px] h-[30px] invert"
-                        alt="chicken"
-                      />
-                      x {row.ColumnE}
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
           </div>
         ))}
+      </div>
+
+      {/* TOP TEAM */}
+      {processedOverallData.teams.length > 0 && (
+        <div
+          style={{
+            background: `linear-gradient(90deg, ${tournament.primaryColor} 0%, #000000 50%, ${tournament.secondaryColor} 100%)`,
+          }}
+          className="grid grid-cols-7 bg-[#000000c1] w-[1730px] h-[240px] ml-[30px] mt-[10px] mb-[60px]"
+        >
+          <div className="font-[AGENCYB] text-[60px] relative left-[30px] top-[20px]">
+            #1
+          </div>
+          <div className="flex relative top-[-26px] left-[0px]">
+            {processedOverallData.teams[0].players.map((player, idx) => (
+              <img
+                key={idx}
+                src={player.picUrl || '/def_char.png'}
+                className="w-[500px] h-[266px] object-cover ml-[-80px] relative left-[-60px]"
+              />
+            ))}
+          </div>
+          <div className="flex relative top-[-86px] left-[0px]">
+            <div className="text-[55px] absolute left-[490px] top-[190px] font-[AGENCYB]">
+              {processedOverallData.teams[0].teamTag}
+            </div>
+
+            <img
+              src={processedOverallData.teams[0].teamLogo}
+              className="w-[90px] h-[90px] absolute left-[369px] top-[180px]"
+            />
+          </div>
+          <div className="flex gap-[70px] relative left-[400px] top-[70px] text-center font-[supermolot] font-[900]">
+            <div>
+              <div className="text-[20px] mb-[-10px]">WWCD</div>
+              <div className="text-[70px] font-[Agencyb]">
+                {processedOverallData.teams[0].wwcd}
+              </div>
+            </div>
+            <div>
+              <div className="text-[20px] mb-[-10px]">PLACE</div>
+              <div className="text-[70px] font-[Agencyb]">
+                {processedOverallData.teams[0].placePoints}
+              </div>
+            </div>
+            <div>
+              <div className="text-[20px] mb-[-10px]">KILLS</div>
+              <div className="text-[70px] font-[Agencyb]">
+                {processedOverallData.teams[0].totalKills}
+              </div>
+            </div>
+            <div>
+              <div className="text-[20px] mb-[-10px]">TOTAL</div>
+              <div className="text-[70px] font-[Agencyb]">
+                {processedOverallData.teams[0].total}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIST */}
+      <div className="flex gap-[30px] relative left-[30px] font-[AGENCYB]">
+        {/* LEFT COLUMN */}
+        <div className="flex flex-col gap-[10px] relative left-[0px]">
+          {paginatedTeams.slice(0, 4).map((team, index) => (
+            <motion.div
+              key={team.teamId}
+              className={`w-[850px] h-[80px] flex items-center text-[30px] relative bg-[#000000c1] ${
+                team.rank === 1 ? 'border-2 bg-[#400000c1] border-red-500' : ''
+              }`}
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              {team.rank === 1 && (
+                <motion.div
+                  className="absolute inset-0 rounded-lg pointer-events-none"
+                  initial={{ boxShadow: '0 0 10px rgba(255,0,0,0.5)' }}
+                  animate={{
+                    boxShadow: [
+                      '0 0 10px rgba(255,0,0,0.5)',
+                      '0 0 20px rgba(255,0,0,0.8)',
+                      '0 0 10px rgba(255,0,0,0.5)',
+                    ],
+                  }}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                />
+              )}
+              <div className="w-[5%] text-center pl-[20px]">#{team.rank}</div>
+              <div className="w-[25%] text-center">{team.teamTag.toUpperCase()}</div>
+              <div className="w-[10%] text-center">
+                <img src={team.teamLogo} className="w-12 h-12 mx-auto" />
+              </div>
+              <div className="w-[15%] text-center">{team.wwcd || 0}</div>
+              <div className="w-[15%] text-center">{team.placePoints}</div>
+              <div className="w-[15%] text-center">{team.totalKills}</div>
+              <div className="w-[15%] text-center">{team.total}</div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* RIGHT COLUMN */}
+        <div className="flex flex-col gap-[10px]">
+          {paginatedTeams.slice(4, 8).map((team) => {
+            const isGlowing = team.rank && team.rank >= 21 && team.rank <= 24;
+            return (
+              <motion.div
+                key={team.teamId}
+                className={`w-[850px] h-[80px] flex items-center text-[30px] relative bg-[#000000c1] ${
+                  isGlowing ? 'border-2 bg-[#400000c1] border-red-500' : ''
+                }`}
+                initial={{ opacity: 0, y: 50 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                {isGlowing && (
+                  <motion.div
+                    className="absolute inset-0 rounded-lg pointer-events-none"
+                    initial={{ boxShadow: '0 0 10px rgba(255,0,0,0.5)' }}
+                    animate={{
+                      boxShadow: [
+                        '0 0 10px rgba(255,0,0,0.5)',
+                        '0 0 20px rgba(255,0,0,0.8)',
+                        '0 0 10px rgba(255,0,0,0.5)',
+                      ],
+                    }}
+                    transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                  />
+                )}
+                <div className="w-[5%] text-center pl-[20px]">#{team.rank ?? 0}</div>
+                <div className="w-[25%] text-center">{team.teamTag.toUpperCase()}</div>
+                <div className="w-[10%] text-center">
+                  <img src={team.teamLogo} className="w-12 h-12 mx-auto" />
+                </div>
+                <div className="w-[15%] text-center">{team.wwcd || 0}</div>
+                <div className="w-[15%] text-center">{team.placePoints}</div>
+                <div className="w-[15%] text-center">{team.totalKills}</div>
+                <div className="w-[15%] text-center">{team.total}</div>
+              </motion.div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 };
-
 
 export default OverAllDataComponent;

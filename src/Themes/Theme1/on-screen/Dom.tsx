@@ -344,7 +344,7 @@ useEffect(() => {
               </div>
 
               {/* Player Name */}
-              <div className="text-2xl font-bold text-black bg-white w-[300px] h-[40px] top-[-135px] relative">
+              <div className="text-2xl font-bold text-black bg-white w-[300px] h-[40px] top-[-133px] relative">
                 {displayedPlayer.playerName}
               </div>
 

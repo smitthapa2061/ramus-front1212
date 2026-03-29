@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SocketManager from '../../../dashboard/socketManager.tsx';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface Tournament {
   _id: string;
   tournamentName: string;
@@ -31,22 +33,20 @@ interface Player {
   killNum: number;
   bHasDied: boolean;
   picUrl?: string;
-
-  // Live stats fields
   health: number;
   healthMax: number;
-  liveState: number; // 0 = knocked, 5 = dead, etc.
-  rank?: number; // Team rank when eliminated
+  liveState: number;
+  rank?: number;
 }
 
 interface Team {
   _id: string;
   teamTag: string;
-  teamName : string;
+  teamName: string;
   slot?: number;
   placePoints: number;
   players: Player[];
-  teamLogo:string;
+  teamLogo: string;
 }
 
 interface MatchData {
@@ -61,627 +61,337 @@ interface AlertsProps {
   matchData?: MatchData | null;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 const Alerts: React.FC<AlertsProps> = ({ tournament, round, match, matchData }) => {
-  console.log('Alerts: Component mounted/updated with props:', { tournament: tournament?.tournamentName, round: round?.roundName, match: match?.matchName, matchDataId: matchData?._id });
-
-  const [localMatchData, setLocalMatchData] = useState<MatchData | null>(matchData || null);
-  const [matchDataId, setMatchDataId] = useState<string | null>(matchData?._id?.toString() || null);
-  const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
-  const [socketStatus, setSocketStatus] = useState<string>('disconnected');
-  const [updateCount, setUpdateCount] = useState<number>(0);
-  const [animating, setAnimating] = useState<boolean>(false);
-  const [showAlert, setShowAlert] = useState<boolean>(false);
+  const [localMatchData,   setLocalMatchData]   = useState<MatchData | null>(matchData || null);
+  const [matchDataId,      setMatchDataId]      = useState<string | null>(matchData?._id?.toString() || null);
+  const [lastUpdateTime,   setLastUpdateTime]   = useState<number>(Date.now());
+  const [showAlert,        setShowAlert]        = useState<boolean>(false);
   const [currentAlertTeam, setCurrentAlertTeam] = useState<Team | null>(null);
-  const shownTeamsRef = useRef<Set<string>>(new Set());
-  const [previousDataHash, setPreviousDataHash] = useState<string>('');
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const alertIdRef = useRef<number>(0);
-  const [displayedRank, setDisplayedRank] = useState<string>('');
-  const [displayedKills, setDisplayedKills] = useState<string>('');
-  const [displayedEliminated, setDisplayedEliminated] = useState<string>('');
 
-  // Create a simple hash of the data for comparison
-  const createDataHash = (data: any): string => {
-    if (!data || !data.teams) return '';
-    return data.teams.map((team: Team) =>
-      team.players.map((p: Player) => `${p._id}-${p.killNum}-${p.bHasDied}-${p.liveState}-${p.health}`).join(',')
-    ).join('|');
-  };
+  const shownTeamsRef  = useRef<Set<string>>(new Set());
+  const timeoutRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const alertIdRef     = useRef<number>(0);
 
-
+  // ── Sync matchData prop ────────────────────────────────────────────────────
   useEffect(() => {
     if (matchData) {
-      console.log('Alerts: Received new matchData prop, updating local state');
       setLocalMatchData(matchData);
       setMatchDataId(matchData._id?.toString());
       setLastUpdateTime(Date.now());
-      // Do not show alerts for initial dead players, only for new deaths via socket
-      console.log('Alerts: MatchData updated, not triggering initial alert');
     }
   }, [matchData]);
 
+  // ── Reset when match changes ───────────────────────────────────────────────
   useEffect(() => {
-    if (!matchDataId) {
-      console.log('Alerts: Skipping socket setup - matchDataId missing', { matchDataId });
-      return;
+    if (matchData && matchData._id?.toString() !== matchDataId) {
+      setLocalMatchData(matchData);
+      setMatchDataId(matchData._id?.toString());
+      shownTeamsRef.current.clear();
+      setShowAlert(false);
+      setCurrentAlertTeam(null);
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     }
+  }, [matchData, matchDataId]);
 
-    console.log('Alerts: Setting up real-time listeners for Alerts - matchData:', matchDataId);
+  // ── Helper: trigger alert for a fully eliminated team ─────────────────────
+  const triggerEliminationAlert = (team: Team) => {
+    if (shownTeamsRef.current.has(team._id)) return;
+    shownTeamsRef.current.add(team._id);
+    alertIdRef.current += 1;
+    setCurrentAlertTeam(team);
+    setShowAlert(true);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      setShowAlert(false);
+      setCurrentAlertTeam(null);
+      timeoutRef.current = null;
+    }, 6000);
+  };
 
-    // Get a fresh socket connection from the manager
+  // ── Helper: is a team fully wiped ─────────────────────────────────────────
+  const isEliminated = (team: Team) =>
+    team.players.every(p => p.health === 0 || p.bHasDied || p.liveState === 5);
+
+  // ── Socket setup ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!matchDataId) return;
+
     const socketManager = SocketManager.getInstance();
-    const freshSocket = socketManager.connect();
+    const freshSocket   = socketManager.connect();
 
-    console.log('Alerts: Socket connected:', freshSocket?.connected, 'ID:', freshSocket?.id);
-
-    // Update initial status
-    setSocketStatus(freshSocket?.connected ? 'connected' : 'disconnected');
-
-    // Test socket connection
-    freshSocket.emit('test', 'Alerts component connected');
-
-    // Log all incoming events for debugging
-    const debugHandler = (eventName: string, data: any) => {
-      console.log(`Alerts: Received ${eventName}:`, data);
-    };
-
-    freshSocket.onAny(debugHandler);
-
-    // Create unique event handler names to avoid conflicts with dashboard
     const alertsHandlers = {
       handleLiveUpdate: (data: any) => {
-        console.log('Alerts: Received liveMatchUpdate for match:', data._id);
-
-        // Check if this update is for the current match
-        if (data._id?.toString() !== matchDataId) {
-          console.log('Alerts: liveMatchUpdate not for current match, ignoring');
-          return;
-        }
-
-        // Create hash of incoming data for comparison
-        const newHash = createDataHash(data);
-
-        console.log('Alerts: Data hash comparison - previous:', previousDataHash, 'new:', newHash);
-
-        // Only process if data has actually changed
-        if (previousDataHash !== newHash) {
-          console.log('Alerts: Data has changed, processing update');
-          // Process the update for this match
-          if (data._id) {
-            console.log('Alerts: Updating localMatchData with live API data');
-            setLocalMatchData((prev: MatchData | null) => {
-              const newData = data;
-              // Check for team eliminations after update
-              if (newData.teams) {
-                for (const team of newData.teams) {
-                  if (team.players.every((p: Player) => p.health === 0 || p.bHasDied || p.liveState === 5)) {
-                    if (!shownTeamsRef.current.has(team._id)) {
-                      console.log('Alerts: Team fully eliminated in liveMatchUpdate:', team.teamTag, '- showing alert');
-                      shownTeamsRef.current.add(team._id);
-                      setCurrentAlertTeam(team);
-                      alertIdRef.current += 1;
-                      setShowAlert(true);
-                      setAnimating(true);
-                      setTimeout(() => setAnimating(false), 500);
-                      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-                      timeoutRef.current = setTimeout(() => {
-                        console.log('Alerts: Auto-hiding alert after 5 seconds from liveMatchUpdate');
-                        setShowAlert(false);
-                        setCurrentAlertTeam(null);
-                        timeoutRef.current = null;
-                      }, 6000);
-                      break; // Only show one alert at a time
-                    } else {
-                      console.log('Alerts: Team already shown:', team.teamTag, '- skipping');
-                    }
-                  }
-                }
+        if (data._id?.toString() !== matchDataId) return;
+        if (data._id) {
+          setLocalMatchData((prev: MatchData | null) => {
+            const newData = data;
+            if (newData.teams) {
+              for (const team of newData.teams) {
+                if (isEliminated(team)) { triggerEliminationAlert(team); break; }
               }
-              return newData;
-            });
-            setLastUpdateTime(Date.now());
-            setUpdateCount(prev => prev + 1);
-            setPreviousDataHash(newHash);
-          }
-        } else {
-          console.log('Alerts: Data unchanged, skipping processing');
+            }
+            return newData;
+          });
+          setLastUpdateTime(Date.now());
         }
       },
 
       handleMatchDataUpdate: (data: any) => {
-        console.log('Alerts: Received matchDataUpdated:', data);
-        if (data.matchDataId === matchDataId) {
-          let newDeadPlayers: Player[] = [];
-          setLocalMatchData((prev: MatchData | null) => {
-            if (!prev) {
-              console.log('Alerts: No prev matchData in matchDataUpdate, skipping');
-              return prev;
-            }
-            const updatedTeams = prev.teams.map((team: any) => {
-              // Check both _id and teamId for team matching
-              if (team._id === data.teamId || team.teamId === data.teamId) {
-                const changes = data.changes || {};
-                const nextTeam: any = { ...team, ...changes };
-                if (Array.isArray(changes.players)) {
-                  const updatesById = new Map(
-                    changes.players.map((p: any) => [p._id?.toString?.() || p._id, p])
-                  );
-                  nextTeam.players = team.players.map((p: Player) => {
-                    const key = p._id?.toString?.() || p._id;
-                    const upd = updatesById.get(key);
-                    console.log('Alerts: Player', p._id, 'old bHasDied:', p.bHasDied, 'new:', (upd as Player)?.bHasDied);
-                    if (upd && (upd as Player).bHasDied) {
-                      newDeadPlayers.push(upd as Player);
-                    }
-                    return upd ? { ...p, ...upd } : p;
-                  });
-                }
-                return nextTeam;
+        if (data.matchDataId !== matchDataId) return;
+        setLocalMatchData((prev: MatchData | null) => {
+          if (!prev) return prev;
+          const updatedTeams = prev.teams.map((team: any) => {
+            if (team._id === data.teamId || team.teamId === data.teamId) {
+              const changes  = data.changes || {};
+              const nextTeam = { ...team, ...changes };
+              if (Array.isArray(changes.players)) {
+                const byId = new Map(changes.players.map((p: any) => [p._id?.toString?.() || p._id, p]));
+                nextTeam.players = team.players.map((p: Player) => {
+                  const upd = byId.get(p._id?.toString?.() || p._id);
+                  return upd ? { ...p, ...upd } : p;
+                });
               }
-              return team;
-            });
-            const updatedTeam = updatedTeams.find(t => t._id === data.teamId || t.teamId === data.teamId);
-            if (updatedTeam && updatedTeam.players.every((p: Player) => p.health === 0 || p.bHasDied || p.liveState === 5)) {
-              if (!shownTeamsRef.current.has(updatedTeam._id)) {
-                console.log('Alerts: Team fully eliminated in matchDataUpdate:', updatedTeam.teamTag, 'setting alert');
-                shownTeamsRef.current.add(updatedTeam._id);
-                setCurrentAlertTeam(updatedTeam);
-                alertIdRef.current += 1;
-                setShowAlert(true);
-                setAnimating(true);
-                setTimeout(() => setAnimating(false), 500);
-                if (timeoutRef.current) clearTimeout(timeoutRef.current);
-                timeoutRef.current = setTimeout(() => {
-                  console.log('Alerts: Auto-hiding alert after 5 seconds from matchDataUpdate');
-                  setShowAlert(false);
-                  setCurrentAlertTeam(null);
-                  timeoutRef.current = null;
-                }, 6000);
-              } else {
-                console.log('Alerts: Team already shown:', updatedTeam.teamTag, '- skipping');
-              }
+              return nextTeam;
             }
-            return { ...prev, teams: updatedTeams };
+            return team;
           });
-          // The check for team elimination is done in the setLocalMatchData function
-          setLastUpdateTime(Date.now());
-          setUpdateCount(prev => prev + 1);
-        } else {
-          console.log('Alerts: matchDataId mismatch in matchDataUpdate, ignoring');
-        }
+          const updatedTeam = updatedTeams.find((t: any) => t._id === data.teamId || t.teamId === data.teamId);
+          if (updatedTeam && isEliminated(updatedTeam)) triggerEliminationAlert(updatedTeam);
+          return { ...prev, teams: updatedTeams };
+        });
+        setLastUpdateTime(Date.now());
       },
 
       handlePlayerUpdate: (data: any) => {
-        console.log('Alerts: Received playerStatsUpdated:', data);
-        console.log('Alerts: Player update for player:', data.playerId, 'bHasDied in update:', data.updates?.bHasDied, 'matchDataId match:', data.matchDataId === matchDataId);
-        if (data.matchDataId === matchDataId) {
-          setLocalMatchData((prev: MatchData | null) => {
-            if (!prev) {
-              console.log('Alerts: No prev matchData, skipping update');
-              return prev;
+        if (data.matchDataId !== matchDataId) return;
+        setLocalMatchData((prev: MatchData | null) => {
+          if (!prev) return prev;
+          const newTeams = prev.teams.map((team: any) => {
+            if (team._id === data.teamId || team.teamId === data.teamId) {
+              return {
+                ...team,
+                players: team.players.map((player: Player) =>
+                  player._id === data.playerId ? { ...player, ...data.updates } : player
+                ),
+              };
             }
-            const newTeams = prev.teams.map((team: any) => {
-              // Check both _id and teamId for team matching
+            return team;
+          });
+          const updatedTeam = newTeams.find((t: any) => t._id === data.teamId || t.teamId === data.teamId);
+          if (updatedTeam && isEliminated(updatedTeam)) triggerEliminationAlert(updatedTeam);
+          return { ...prev, teams: newTeams };
+        });
+        setLastUpdateTime(Date.now());
+      },
+
+      handleTeamPointsUpdate: (data: any) => {
+        if (data.matchDataId !== matchDataId) return;
+        setLocalMatchData((prev: MatchData | null) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            teams: prev.teams.map((team: any) =>
+              team._id === data.teamId || team.teamId === data.teamId
+                ? { ...team, placePoints: data.changes?.placePoints ?? team.placePoints }
+                : team
+            ),
+          };
+        });
+        setLastUpdateTime(Date.now());
+      },
+
+      handleTeamStatsUpdate: (data: any) => {
+        if (data.matchDataId !== matchDataId) return;
+        setLocalMatchData((prev: MatchData | null) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            teams: prev.teams.map((team: any) => {
               if (team._id === data.teamId || team.teamId === data.teamId) {
+                const updatedPlayers = data.players
+                  ? team.players.map((player: any) => {
+                      const upd = data.players.find((p: any) => p._id === player._id);
+                      return upd ? { ...player, killNum: upd.killNum } : player;
+                    })
+                  : team.players;
+                return { ...team, players: updatedPlayers };
+              }
+              return team;
+            }),
+          };
+        });
+        setLastUpdateTime(Date.now());
+      },
+
+      handleBulkTeamUpdate: (data: any) => {
+        if (data.matchDataId !== matchDataId) return;
+        setLocalMatchData((prev: MatchData | null) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            teams: prev.teams.map((team: any) => {
+              if ((team._id === data.teamId || team.teamId === data.teamId) && data.changes?.players) {
+                const byId = new Map(data.changes.players.map((p: any) => [p._id?.toString?.() || p._id, p]));
                 return {
                   ...team,
                   players: team.players.map((player: Player) => {
-                    if (player._id === data.playerId) {
-                      const updatedPlayer = { ...player, ...data.updates };
-                      console.log('Alerts: Updating player', player.playerName, 'old bHasDied:', player.bHasDied, 'new:', updatedPlayer.bHasDied);
-                      return updatedPlayer;
-                    }
-                    return player;
+                    const upd = byId.get(player._id?.toString?.() || player._id);
+                    return upd ? { ...player, ...upd } : player;
                   }),
                 };
               }
               return team;
-            });
-            const updatedTeam = newTeams.find(t => t._id === data.teamId || t.teamId === data.teamId);
-            if (updatedTeam && updatedTeam.players.every((p: Player) => p.health === 0 || p.bHasDied || p.liveState === 5)) {
-              if (!shownTeamsRef.current.has(updatedTeam._id)) {
-                console.log('Alerts: Team fully eliminated:', updatedTeam.teamTag, 'setting alert');
-                shownTeamsRef.current.add(updatedTeam._id);
-                setCurrentAlertTeam(updatedTeam);
-                alertIdRef.current += 1;
-                setShowAlert(true);
-                setAnimating(true);
-                setTimeout(() => setAnimating(false), 500);
-                if (timeoutRef.current) clearTimeout(timeoutRef.current);
-                timeoutRef.current = setTimeout(() => {
-                  console.log('Alerts: Auto-hiding alert after 5 seconds from player update');
-                  setShowAlert(false);
-                  setCurrentAlertTeam(null);
-                  timeoutRef.current = null;
-                }, 6000);
-              } else {
-                console.log('Alerts: Team already shown:', updatedTeam.teamTag, '- skipping');
-              }
-            }
-            return { ...prev, teams: newTeams };
-          });
-          setLastUpdateTime(Date.now());
-        } else {
-          console.log('Alerts: matchDataId mismatch, ignoring player update');
-        }
+            }),
+          };
+        });
+        setLastUpdateTime(Date.now());
       },
-
-      handleTeamPointsUpdate: (data: any) => {
-        console.log('Alerts: Received team points update:', data);
-        if (data.matchDataId === matchDataId) {
-          setLocalMatchData((prev: MatchData | null) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              teams: prev.teams.map((team: any) => {
-                // Check both _id and teamId for team matching
-                if (team._id === data.teamId || team.teamId === data.teamId) {
-                  return {
-                    ...team,
-                    placePoints: data.changes?.placePoints ?? team.placePoints,
-                  };
-                }
-                return team;
-              }),
-            };
-          });
-          setLastUpdateTime(Date.now());
-        }
-      },
-
-      handleTeamStatsUpdate: (data: any) => {
-        console.log('Alerts: Received teamStatsUpdated:', data);
-        if (data.matchDataId === matchDataId) {
-          setLocalMatchData((prev: MatchData | null) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              teams: prev.teams.map((team: any) => {
-                // Check both _id and teamId for team matching
-                if (team._id === data.teamId || team.teamId === data.teamId) {
-                  // Update player kill numbers if provided
-                  const updatedPlayers = data.players ?
-                    team.players.map((player: any) => {
-                      const playerUpdate = data.players.find((p: any) => p._id === player._id);
-                      return playerUpdate ? { ...player, killNum: playerUpdate.killNum } : player;
-                    }) : team.players;
-
-                  return {
-                    ...team,
-                    players: updatedPlayers,
-                  };
-                }
-                return team;
-              }),
-            };
-          });
-          setLastUpdateTime(Date.now());
-        }
-      },
-
-      handleBulkTeamUpdate: (data: any) => {
-        console.log('Alerts: Received bulk team update:', data);
-        if (data.matchDataId === matchDataId) {
-          setLocalMatchData((prev: MatchData | null) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              teams: prev.teams.map((team: any) => {
-                // Check both _id and teamId for team matching
-                if ((team._id === data.teamId || team.teamId === data.teamId) && data.changes?.players) {
-                  const playerUpdates = new Map(
-                    data.changes.players.map((p: any) => [p._id?.toString?.() || p._id, p])
-                  );
-                  return {
-                    ...team,
-                    players: team.players.map((player: Player) => {
-                      const key = player._id?.toString?.() || player._id;
-                      const update = playerUpdates.get(key);
-                      return update ? { ...player, ...update } : player;
-                    }),
-                  };
-                }
-                return team;
-              }),
-            };
-          });
-          setLastUpdateTime(Date.now());
-        }
-      },
-
-      handleConnect: () => {
-        console.log('Alerts: Socket connected');
-        setSocketStatus('connected');
-      },
-
-      handleDisconnect: () => {
-        console.log('Alerts: Socket disconnected');
-        setSocketStatus('disconnected');
-      }
     };
 
-    // Listen to all relevant socket events with unique handlers
-    freshSocket.on('liveMatchUpdate', alertsHandlers.handleLiveUpdate);
-    freshSocket.on('matchDataUpdated', alertsHandlers.handleMatchDataUpdate);
-    freshSocket.on('playerStatsUpdated', alertsHandlers.handlePlayerUpdate);
+    freshSocket.on('liveMatchUpdate',   alertsHandlers.handleLiveUpdate);
+    freshSocket.on('matchDataUpdated',  alertsHandlers.handleMatchDataUpdate);
+    freshSocket.on('playerStatsUpdated',alertsHandlers.handlePlayerUpdate);
     freshSocket.on('teamPointsUpdated', alertsHandlers.handleTeamPointsUpdate);
-    freshSocket.on('teamStatsUpdated', alertsHandlers.handleTeamStatsUpdate);
-    freshSocket.on('bulkTeamUpdate', alertsHandlers.handleBulkTeamUpdate);
-    freshSocket.on('connect', alertsHandlers.handleConnect);
-    freshSocket.on('disconnect', alertsHandlers.handleDisconnect);
+    freshSocket.on('teamStatsUpdated',  alertsHandlers.handleTeamStatsUpdate);
+    freshSocket.on('bulkTeamUpdate',    alertsHandlers.handleBulkTeamUpdate);
 
     return () => {
-      console.log('Alerts: Cleaning up socket listeners');
-      // Clean up debug handler
-      freshSocket.offAny();
-
-      // Clean up with the exact same handler references
-      freshSocket.off('liveMatchUpdate', alertsHandlers.handleLiveUpdate);
-      freshSocket.off('matchDataUpdated', alertsHandlers.handleMatchDataUpdate);
-      freshSocket.off('playerStatsUpdated', alertsHandlers.handlePlayerUpdate);
+      freshSocket.off('liveMatchUpdate',   alertsHandlers.handleLiveUpdate);
+      freshSocket.off('matchDataUpdated',  alertsHandlers.handleMatchDataUpdate);
+      freshSocket.off('playerStatsUpdated',alertsHandlers.handlePlayerUpdate);
       freshSocket.off('teamPointsUpdated', alertsHandlers.handleTeamPointsUpdate);
-      freshSocket.off('teamStatsUpdated', alertsHandlers.handleTeamStatsUpdate);
-      freshSocket.off('bulkTeamUpdate', alertsHandlers.handleBulkTeamUpdate);
-      freshSocket.off('connect', alertsHandlers.handleConnect);
-      freshSocket.off('disconnect', alertsHandlers.handleDisconnect);
-      // Keep socket connected, just remove listeners
-      // socketManager.disconnect();
+      freshSocket.off('teamStatsUpdated',  alertsHandlers.handleTeamStatsUpdate);
+      freshSocket.off('bulkTeamUpdate',    alertsHandlers.handleBulkTeamUpdate);
     };
   }, [matchDataId]);
 
-  // Add effect to handle prop changes and force re-render
-  useEffect(() => {
-    if (matchData && matchData._id?.toString() !== matchDataId) {
-      console.log('MatchData prop changed, updating local state and resetting shown teams');
-      setLocalMatchData(matchData);
-      setMatchDataId(matchData._id?.toString());
-      // Reset shown teams when component remounts or match changes
-      shownTeamsRef.current.clear();
-      setShowAlert(false);
-      setCurrentAlertTeam(null);
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-    }
-  }, [matchData, matchDataId]);
+  // Cleanup timer on unmount
+  useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
 
-  // Sort teams by points first, then by kills - recalculated on every localMatchData change
+  // ── Derived data ───────────────────────────────────────────────────────────
   const sortedTeams = useMemo(() => {
     if (!localMatchData) return [];
-
-    console.log('Alerts: Recalculating sortedTeams at', new Date(lastUpdateTime).toLocaleTimeString());
-
     return localMatchData.teams
       .map(team => ({
         ...team,
-        totalKills: team.players.reduce((sum, p) => sum + (p.killNum || 0), 0),
-        alive: team.players.filter(p => p.liveState !== 5).length,
-        // Get team rank from players (all players in a team have the same rank when eliminated)
-        teamRank: team.players.length > 0 ? (team.players[0].rank || 0) : 0,
+        totalKills: team.players.reduce((s, p) => s + (p.killNum || 0), 0),
+        alive:      team.players.filter(p => p.liveState !== 5).length,
+        teamRank:   team.players[0]?.rank || 0,
       }))
-      .sort((a, b) => {
-        // Sort by points first (descending), then by kills (descending)
-        if (b.placePoints !== a.placePoints) {
-          return b.placePoints - a.placePoints;
-        }
-        return b.totalKills - a.totalKills;
-      });
+      .sort((a, b) =>
+        b.placePoints !== a.placePoints
+          ? b.placePoints - a.placePoints
+          : b.totalKills - a.totalKills
+      );
   }, [localMatchData, lastUpdateTime]);
 
-  // Typing animation effect
-  useEffect(() => {
-    const alertTeam = currentAlertTeam ? sortedTeams.find(t => t._id === currentAlertTeam._id) : null;
-    if (showAlert && alertTeam) {
-      const rankText = `#${alertTeam.teamRank}`;
-      const killsText = `${alertTeam.totalKills}`;
-      const elimText = 'ELIMINATED';
+  const alertTeam = useMemo(
+    () => currentAlertTeam ? sortedTeams.find(t => t._id === currentAlertTeam._id) ?? null : null,
+    [currentAlertTeam, sortedTeams]
+  );
 
-      // Type rank
-      for (let i = 0; i <= rankText.length; i++) {
-        setTimeout(() => setDisplayedRank(rankText.slice(0, i)), i * 100);
-      }
+  if (!localMatchData) return null;
 
-      // Type kills
-      for (let i = 0; i <= killsText.length; i++) {
-        setTimeout(() => setDisplayedKills(killsText.slice(0, i)), i * 100);
-      }
+  const primary   = tournament.primaryColor  || '#6b21a8';
+  const secondary = tournament.secondaryColor || '#c084fc';
 
-      // Type eliminated
-      for (let i = 0; i <= elimText.length; i++) {
-        setTimeout(() => setDisplayedEliminated(elimText.slice(0, i)), i * 100);
-      }
-    } else {
-      setDisplayedRank('');
-      setDisplayedKills('');
-      setDisplayedEliminated('');
-    }
-  }, [showAlert, currentAlertTeam, sortedTeams]);
+  // ── Render ─────────────────────────────────────────────────────────────────
+return (
+  <div className="w-[1920px] h-[1080px] text-white p-8 relative">
+    <AnimatePresence>
+      {showAlert && alertTeam && (
+        <motion.div
+          key={`alert-${alertIdRef.current}`}
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.6, opacity: 0 }}
+          transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
+          className="w-[600px] h-[180px] bg-black absolute top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%]"
+        >
+          <div className="w-full h-full relative">
 
-  // Alerts component UI
-  const alertPlayers = currentAlertTeam ? currentAlertTeam.players.filter(p => p.bHasDied) : [];
-  const alertTeam = useMemo(() => currentAlertTeam ? sortedTeams.find(t => t._id === currentAlertTeam._id) : null, [currentAlertTeam, sortedTeams]);
+            {/* LEFT PANEL */}
+            <div
+              style={{
+                backgroundImage: `linear-gradient(to left top, ${primary}, ${secondary})`,
+              }}
+              className="w-[30%] h-full"
+            />
 
-  if (!localMatchData) {
-    return null;
-  }
-  console.log('Alerts: Rendering with showAlert:', showAlert, 'currentAlertTeam:', currentAlertTeam?.teamTag, 'alertPlayers:', alertPlayers.map(p => p.playerName));
+            {/* Small team logo */}
+            <img
+              src={alertTeam.teamLogo}
+              alt=""
+              className="w-[9%] h-[30%] absolute top-[2px] left-[127px]"
+            />
 
-  const primaryColor = tournament.primaryColor || "#6b21a8"; // fallback purple
-  const secondaryColor = tournament.secondaryColor || "#c084fc"; // fallback light purple
+            {/* Logo + Background Logo */}
+            <div className="absolute top-[5px] w-[175px] h-[175px]">
 
-  // Animation variants for staggered effect
-  const containerVariants = {
-    hidden: { opacity: 0, scale: 0.9 },
-    visible: {
-      opacity: 1,
-      scale: 1,
-      transition: {
-        duration: 0.5,
-        staggerChildren: 0.15,
-        delayChildren: 0.1
-      }
-    },
-    exit: {
-      opacity: 0,
-      scale: 0.9,
-      transition: { duration: 0.4 }
-    }
-  };
+              {/* Background logo */}
+              <img
+                src={alertTeam.teamLogo}
+                alt=""
+                className="absolute inset-0 w-full h-full object-contain grayscale opacity-10"
+              />
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 30, x: -20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      x: 0,
-      transition: {
-        type: "spring" as const,
-        stiffness: 300,
-        damping: 25,
-        duration: 0.6
-      }
-    }
-  };
-
-  const textVariants = {
-    hidden: { opacity: 0, scale: 0.5 },
-    visible: {
-      opacity: 1,
-      scale: 1,
-      transition: {
-        type: "spring" as const,
-        stiffness: 400,
-        damping: 20,
-        duration: 0.4
-      }
-    }
-  };
-
-  const eliminationsVariants = {
-    hidden: { opacity: 0, y: 50, scale: 0.8 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: {
-        type: "spring" as const,
-        stiffness: 350,
-        damping: 22,
-        duration: 0.5
-      }
-    }
-  };
-
-  return (
-    <div className="w-[1920px] h-[1080px] text-white p-8 relative">
-      <AnimatePresence mode="wait">
-        {showAlert && alertTeam && (
-          <motion.div
-            key={`alert-${alertIdRef.current}`}
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            className="absolute top-[250px] left-[33%] p-[2px]"
-            style={{
-              background: `linear-gradient(to right, ${primaryColor}, ${secondaryColor})`,
-            }}
-          >
-            <div className="w-[600px] h-[250px] bg-[#000000bb] overflow-hidden">
-              {/* Header Bar - First element */}
-              <motion.div
-                variants={itemVariants}
-                style={{
-                  background: `linear-gradient(to right, ${primaryColor}, ${secondaryColor})`,
-                }}
-                className="w-full h-[70px] flex items-center justify-center"
-              >
-                <motion.div 
-                  variants={textVariants}
-                  className="text-[50px] left-[-40px] relative font-[AGENCYB]"
-                >
-                  #{alertTeam.teamRank} POS
-                </motion.div>
-                <motion.div 
-                  variants={textVariants}
-                  className="text-[50px] ml-[60px] font-[AGENCYB]"
-                >
-                  TEAM ELIMINATED
-                </motion.div>
-              </motion.div>
-
-              {/* Team Logo Box - Second element */}
-              <motion.div
-                variants={itemVariants}
-                className="w-1/3 h-[181px] flex items-center justify-center p-[3px]"
-                style={{
-                  border: `2px solid ${primaryColor}`,
-                }}
-              >
-                <motion.div 
-                  variants={textVariants}
-                  className="w-full h-full flex items-center justify-center overflow-hidden"
-                >
-                  {alertTeam.teamLogo ? (
-                    <img
-                      src={alertTeam.teamLogo}
-                      alt={`${alertTeam.teamTag} Logo`}
-                      className="max-w-full max-h-full object-contain"
-                    />
-                  ) : (
-                    <img
-                      src="https://res.cloudinary.com/dqckienxj/image/upload/v1730785916/default_ryi6uf_edmapm.png"
-                      alt="Default Logo"
-                      className="max-w-full max-h-full object-contain"
-                    />
-                  )}
-                </motion.div>
-              </motion.div>
-
-              {/* Team Tag Box - Third element */}
-              <motion.div
-                variants={itemVariants}
-                className="w-[100%] flex items-center justify-center text-[30px] font-mono text-center"
-              >
-                <motion.div
-                  variants={textVariants}
-                  style={{
-                    border: `2px solid ${primaryColor}`,
-                  }}
-                  className="left-[200px] text-green absolute w-[404px] top-[72px] h-[90px] pt-[7px] text-[3rem] font-[AGENCYB]"
-                >
-                  {alertTeam.teamTag}
-                </motion.div>
-              </motion.div>
+              {/* Main logo */}
+              <img
+                src={alertTeam.teamLogo}
+                alt=""
+                className="w-full h-full object-contain relative z-10"
+              />
             </div>
 
-            {/* Eliminations Box - Fourth element */}
-            <motion.div
-              variants={eliminationsVariants}
+            {/* RIGHT PANEL */}
+            <div
+              className="w-[70%] h-full absolute top-0 left-[180px] text-center"
               style={{
-                background: `linear-gradient(to right, ${primaryColor}, ${secondaryColor})`,
+                backgroundImage: `linear-gradient(to bottom right, ${primary}, ${secondary})`,
               }}
-              className="absolute w-[230px] left-[374px] top-[160px] h-[94px] font-[AGENCYB]"
             >
-              <motion.div 
-                variants={textVariants}
-                className="font-[500] text-4xl relative left-[30px] top-[25px] "
+
+              {/* TOP BAR (Team Name) */}
+              <div
+                style={{
+                  backgroundImage: `url('/theme3assets/lines.avif')`,
+                  backgroundSize: '300px',
+                  backgroundRepeat: 'repeat',
+                }}
+                className="w-full h-[25%] bg-black relative overflow-hidden font-[AGENCYB] text-[30px]"
               >
-                ELIMINATIONS
-              </motion.div>
-              <motion.div 
-                variants={textVariants}
-                className="text-white absolute left-[-100px] top-[12px] text-6xl"
+                #{alertTeam.teamRank}-{alertTeam.totalKills} KILLS
+              </div>
+
+              {/* TEAM TAG */}
+              <div className="font-[TUNGSTEN] text-[70px]">
+               {alertTeam.teamName.toUpperCase()}
+              </div>
+
+              {/* BOTTOM BAR */}
+              <div
+                style={{
+                  backgroundImage: `url('/theme3assets/lines.avif')`,
+                  backgroundSize: '300px',
+                  backgroundRepeat: 'repeat',
+                }}
+                className="w-full h-[25%] bg-black absolute top-[133px] font-[AGENCYB] text-[38px]"
               >
-                {alertTeam.totalKills}
-              </motion.div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
+                <div className="relative top-[-7px]">TEAM ELIMINATED</div>
+              </div>
+
+              {/* EXTRA INFO */}
+             
+
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </div>
+);
 };
 
 export default Alerts;

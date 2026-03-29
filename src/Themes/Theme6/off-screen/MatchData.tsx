@@ -78,16 +78,26 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
 }, [matchData]);
 
   // Page toggle: show ranks 2–17 first, then the rest; switch every 25s
-  const [page, setPage] = useState(1);
-  const pageSize = 11;
-  const totalPages = Math.ceil(sortedTeams.length / pageSize);
-
+  const [page, setPage] = useState<'first' | 'second' | 'third'>('first');
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPage((prev) => (prev % totalPages) + 1);
-    }, 20000);
-    return () => clearInterval(interval);
-  }, [sortedTeams, totalPages]);
+  const interval = setInterval(() => {
+    setPage(prev => {
+      if (prev === 'first') {
+        // check if SECOND page has at least 1 team
+        return sortedTeams.slice(16, 25).length > 0 ? 'second' : 'first';
+      }
+
+      if (prev === 'second') {
+        // check if THIRD page has at least 1 team
+        return sortedTeams.slice(25, 34).length > 0 ? 'third' : 'first';
+      }
+
+      return 'first';
+    });
+  }, 25000);
+
+  return () => clearInterval(interval);
+}, [sortedTeams]);
 
   if (!matchData) {
     return (
@@ -98,151 +108,276 @@ const MatchDataComponent: React.FC<MatchDataProps> = ({ tournament, round, match
   }
 
   const topTeam = sortedTeams[0];
-  const startIndex = (page - 1) * pageSize;
-  const visibleData = sortedTeams.slice(startIndex, startIndex + pageSize);
+  const remainingTeams = sortedTeams.slice(1);
+  const lowerTeams = sortedTeams.slice(1, 7); // ranks 2,3,4
+const restTeams = page === 'first'
+  ? sortedTeams.slice(7, 16)   // starts from rank 8
+  : page === 'second'
+  ? sortedTeams.slice(16, 25)
+  : sortedTeams.slice(25, 34);
+// Pagination sets
+const firstPageTeams = remainingTeams.slice(0, 10);   // ranks 2–11 (10 teams)
+const restPageTeams = remainingTeams.slice(10,22);       // ranks 12+
+const pageTeams = page === 'first' ? firstPageTeams : restPageTeams;
+
+// Split current page into 2 equal halves
+const pageMid = Math.ceil(pageTeams.length / 2);
+const leftTeams = pageTeams.slice(0, pageMid);
+const rightTeams = pageTeams.slice(pageMid);
+
 
   return (
-    <div className="w-[1920px] h-[1080px] text-white p-8 ">
-      <div className="w-full h-[30%]">
-        <div
-          className="px-6 py-2 font-[Awaking] tracking-wider text-[160px] leading-[1] absolute top-[50px] left-[190px] font-[700] bg-gradient-to-l from-[#ffa300] to-[#f9df67] text-transparent bg-clip-text drop-shadow-[0px_7px_10px_rgba(0,0,0,0.3)] scale-y-[1.4]">
-          MATCH STANDINGS
-        </div>
+    <div className="w-[1920px] h-[1080px] relative  ">
+      <div className=' w-[1600px] h-[250px] absolute top-[40px] left-[60px]  '>
+<div 
 
-        <div
-          style={{
-            backgroundImage: `linear-gradient(to left, transparent, ${tournament.primaryColor})`,
-            clipPath: "polygon(30px 0%, 100% 0%, 100% 100%, 30px 100%, 0% 50%)",
-          }}
-          className="w-[1000px] h-[50px] absolute left-[240px] top-[260px] text-white font-[AGENCYB] font-[100] text-[2.5rem] tracking-wide"
-        >
-          <div className="relative top-[-5px] left-[50px]">
-            {tournament.tournamentName} - {round?.roundName} - POST MATCH - {match?.matchNo}
-          </div>
-        </div>
-      </div>
+className="px-6 py-2 font-[Awaking] tracking-wide text-[140px] absolute top-[20px] left-[90px] font-[700] bg-gradient-to-l from-[#ffa300] to-[#f9df67] text-transparent bg-clip-text scale-y-[1.4]">
+  MATCH RANKINGS
 
-      <div className="w-full text-sm">
-        {/* Header */}
-        <div className="flex">
-          <div className="w-[800px] text-black text-[1.8rem] bg-white h-[40px] relative mb-[10px] left-[30px] font-[supermolot] pl-[30PX] font-[700]">
-            <div className="absolute top-[10px]">#</div>
-            <div className="absolute top-[10px] left-[130px]">TEAM</div>
-            <div className="absolute top-[10px] left-[370px]">WWCD</div>
-            <div className="absolute top-[10px] left-[480px]">PLACE</div>
-            <div className="absolute top-[10px] left-[600px]">KILLS</div>
-            <div className="absolute top-[10px] left-[720px]">TOTAL</div>
-          </div>
-          <div className="w-[800px] text-black text-[1.8rem] bg-white h-[40px] relative mb-[10px] left-[160px] font-[supermolot] pl-[30PX] font-[700]">
-            <div className="absolute top-[10px]">#</div>
-            <div className="absolute top-[10px] left-[130px]">TEAM</div>
-            <div className="absolute top-[10px] left-[370px]">WWCD</div>
-            <div className="absolute top-[10px] left-[480px]">PLACE</div>
-            <div className="absolute top-[10px] left-[600px]">KILLS</div>
-            <div className="absolute top-[10px] left-[720px]">TOTAL</div>
-          </div>
-        </div>
 
-        {/* 🥇 Top 1 Team Highlighted */}
-        {sortedTeams.length > 0 && (
-          <div className="grid grid-cols-7 text-center bg-[#000000c1] w-[1600px] h-[180px] left-[100px] ml-[100px] font-bold shadow-lg scale-[1.01] mb-2 mt-[10px] font-[AGENCYB]">
-            <div className="flex relative top-[-86px] left-[60px]">
-              {topTeam?.players.map((player, idx) => (
-                <img
-                  key={idx}
-                  src={player.picUrl || "/def_char.png"}
-                  alt={player.playerName}
-                  className="w-[200px] h-[200px] object-cover top-[65px] relative ml-[-60px]"
-                />
-              ))}
-
-              <div className="text-white text-[55px] absolute left-[670px] top-[220px] font-russo">{topTeam?.teamTag}</div>
-              {topTeam?.teamLogo ? (
-                <img
-                  src={topTeam.teamLogo}
-                  alt={topTeam.teamName}
-                  className="w-[150px] h-[150px] object-contain absolute left-[629px] top-[66px]"
-                />
-              ) : (
-                <span className="text-gray-500">N/A</span>
-              )}
-              <div className="w-[100%] text-center">
-                <div className="w-[80%] h-[2px] bg-white absolute left-[615px] top-[200px]"></div>
-              </div>
-            </div>
-
-            <div className="flex flex-row gap-[70px] relative left-[700px] top-[50px] font-russo">
-              <div className="text-[30px]">
-                <div className="mb-[30px] flex gap-1">
-                  {Number(topTeam?.placePoints) === 10 ? (
-                    <img src="/chicken.avif" alt="WWCD" className="w-8 h-8 object-contain invert" />
-                  ) : (
-                    <span className='text-green-500'>wwcd</span>
-                  )}
-                </div>
+  
+</div>
+<div className='text-[44px] font-[AGENCYB] mt-[110px] absolute   left-[1000px] w-[300px] flex  bg-black text-white text-center'>
+     
+     <div 
+     style={{
+    borderColor: `${tournament.primaryColor}`
+     }}
+     className='w-[100%] h-[30%] border-2'>
+   {round?.day} DAY  
+   </div>
+   <div 
+    style={{
+            backgroundImage: `linear-gradient(to left,  ${tournament.primaryColor}, ${tournament.secondaryColor})`,
           
-              </div>
-              <div className="text-[30px] ">
-                <div className="mb-[30px] text-[50px]">{topTeam?.placePoints}</div>
-                <div className="w-[110px] h-[2px] bg-white absolute left-[50px] top-[40px]"></div>
-                <div className="ml-[7px]">PLACE</div>
-              </div>
-              <div className="text-[30px]">
-                <div className="mb-[30px] text-[50px]">{topTeam?.totalKills}</div>
-                <div className="w-[110px] h-[2px] bg-white absolute left-[200px] top-[40px]"></div>
-                <div className="ml-[10px]">KILLS</div>
-              </div>
-              <div className="text-[30px]">
-                <div className="mb-[30px] text-[50px]">{topTeam?.total}</div>
-                <div className="w-[110px] h-[2px] bg-white absolute left-[330px] top-[40px]"></div>
-                <div className="ml-[12px]">TOTAL</div>
-              </div>
-            </div>
-          </div>
-        )}
+          }} className='w-[100%] h-[30%]'
+   >   {match?.matchNo} MATCH </div>
 
-        {/* 🏅 Teams #2 and onward in grid-cols-2 layout */}
-        <div className="grid grid-cols-2 gap-x-[-195px] gap-y-[10px] w-[100%] h-[100%] relative left-[30px] font-[AGENCYB]">
-          {visibleData.slice(1).map((team, index) => (
-            <motion.div
-              key={`${page}-${index}`}
-              className="w-[800px] h-[80px] flex items-center font-[AGENCYB] bg-[#000000c1] gap-x-1 p-2 text-[30px]"
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.5,
-                ease: "easeOut",
-                delay: index * 0.2,
-              }}
-            >
-              <div className="w-[5%] text-center pl-[20px] font-[AGENCYB]">{(page - 1) * pageSize + index + 2}</div>
-              <div className="w-[25%] text-center pl-[20px] font-[AGENCYB]">{team.teamTag}</div>
-              <div className="w-[10%] text-center pl-[20px]">
-                {team.teamLogo ? (
-                  <img
-                    src={team.teamLogo}
-                    alt={team.teamName}
-                   
-                    className="w-12 h-12 mx-auto object-contain"
-                  />
-                ) : (
-                  <span className="text-gray-500">N/A</span>
-                )}
-              </div>
-              <div className="w-[15%] text-center pl-[26px] flex justify-center">
-                {Number(team.placePoints) === 10 ? (
-                  <img src="/chicken.avif" alt="WWCD" className="w-6 h-6 object-contain" />
-                ) : (
-                  <span></span>
-                )}
-              </div>
-              <div className="w-[15%] text-center pl-[20px]">{team.placePoints}</div>
-              <div className="w-[15%] text-center pl-[20px]">{team.totalKills}</div>
-              <div className="w-[15%] text-center pl-[20px]">{team.total}</div>
-            </motion.div>
-          ))}
-        </div>
+  </div>
+</div>
+
+      <svg 
+      
+      className="absolute inset-0" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="paint0_linear_2104_2" x1="161.5" y1="319" x2="68.5" y2="327" gradientUnits="userSpaceOnUse">
+            <stop stop-color=""/>
+            <stop offset="1" stop-color="black"/>
+          </linearGradient>
+          <linearGradient id="paint1_linear_2104_2" x1="203.5" y1="265" x2="152.5" y2="227.5" gradientUnits="userSpaceOnUse">
+            <stop stop-color={tournament.primaryColor}/>
+            <stop offset="1" stop-color="black"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <div 
+       style={{
+   backgroundImage: `linear-gradient(135deg, ${
+  tournament.secondaryColor || '#212121'
+}, #000)`,
+borderColor: `${tournament.primaryColor}`
+  }}      
+      className="absolute left-[146.5px] top-[280.5px] w-[891px] h-[202px]  bg-gradient-to-br from-white to-[#ededed] border-2" >
+        
+        <svg className="absolute inset-0" viewBox="0 0 891 332" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="paint3_linear_2104_2" x1="463" y1="593.5" x2="119" y2="549" gradientUnits="userSpaceOnUse">
+              <stop stop-color={tournament.primaryColor}/>
+              <stop offset="1" stop-color="black"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        {topTeam?.players.map((player, index) => (
+          <img key={player._id} src={player.picUrl || "/def_char.png"} className="absolute " style={{left: `${index * 102.75}px`, top: '-4px', width: '202.75px', height: '202px'}} />
+        ))}
+        <div>{topTeam?.placePoints === 10 && (
+  <img
+    src="/theme4assets/chicken.png"
+    alt="WWCD"
+    className="absolute left-[830px] w-[50px] h-[80px] object-contain"
+  />
+)}</div>
+
+<div className=' w-[380px] absolute left-[490px] top-[60px] h-[70px]'>
+<div className='flex items-center justify-center font-[AGENCYB] text-[38px] text-white  gap-[10px]'>
+<img src={topTeam?.teamLogo} alt="" className='w-[70px] items-center '/>
+<div>{topTeam?.teamName.toUpperCase()}</div>
+</div>
+</div>
+<div 
+ style={{
+             
+              background: ` ${tournament.primaryColor} `
+              
+          
+            }}
+className='text-white w-[350px]  absolute left-[537px] bottom-[0px] font-[AGENCYB] text-[38px]  gap-[90px] flex pl-[55px]'>
+  <div>
+  {topTeam?.placePoints}
+  </div>
+  <div>
+   {topTeam?.totalKills}
+   </div>
+   <div>
+    {topTeam?.total}
+    </div>
+</div>
       </div>
+      
+      <div 
+      
+      className="absolute left-[146px] top-[488px] w-[891px] h-[30px] border-2 text-black font-[AGENCYB] text-[18px] flex items-center gap-[130px]" style={{background: 'linear-gradient(to bottom right, #ffffff, #e0e0e0)', borderColor: tournament.secondaryColor}}>
+   <div className='pl-[10px]'>
+    SIRALAMA
+   </div>
+   <div className='pl-[10px]'>
+    TAKIM
+   </div>
+ <div className='pl-[210px]'>
+    PUANI
+   </div>
+    <div className='ml-[-40px]'>
+    SKOR
+   </div>
+    <div className='ml-[-55px]'>
+    TOPLAM
+   </div>
+        
+      </div>
+{lowerTeams.map((team, index) => {
+  const topPosition = 523 + index * 64; // row spacing
+  const rankNumber = index + 2; // 2,3,4
+
+  return (
+    <motion.div
+      key={team._id}
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.3, duration: 1 }} // stagger each row by 0.3s
+      className="absolute left-[146px] w-[891px] h-[60px] border-2 border-white flex items-center text-white"
+      style={{ top: `${topPosition}px`, background: 'linear-gradient(to bottom right, #0f0f0f, #1f1f1f)' }}
+    >
+      {/* LEFT COLOR STRIP WITH RANK NUMBER */}
+      <div
+        className="w-[76px] h-full flex items-center justify-center text-white font-[AGENCYB] text-[38px]"
+     >
+        #{rankNumber}
+      </div>
+
+      {/* TEAM LOGO */}
+      <div className="w-[50px] h-[50px] ml-6 flex-shrink-0">
+        <img
+          src={team.teamLogo || "/def_logo.png"}
+          alt={team.teamName}
+          className="w-full h-full object-contain"
+        />
+      </div>
+
+      {/* TEAM NAME */}
+      <div className="flex-1 text-white font-[AGENCYB] text-[38px] ml-6">
+        {team.teamName.toUpperCase()}
+      </div>
+
+    
+<div className='flex gap-[40px]'>
+    {/* WWCD ICON */}
+      {team.placePoints === 10 && (
+        <img
+          src="/theme4assets/chicken.png"
+          alt="WWCD"
+          className="w-[45px] h-[45px]"
+        />
+      )}
+      {/* PLACE POINTS */}
+      <div className="w-[80px] text-white font-[AGENCYB] text-[38px] text-center">
+        {team.placePoints}
+      </div>
+
+      {/* KILLS */}
+      <div className="w-[80px] text-white font-[AGENCYB] text-[38px] text-center">
+        {team.players.reduce((s, p) => s + (p.killNum || 0), 0)}
+      </div>
+
+      {/* TOTAL */}
+      <div className="w-[80px] text-white font-[AGENCYB] text-[38px] text-center">
+        {team.placePoints + team.players.reduce((s, p) => s + (p.killNum || 0), 0)}
+      </div>
+      </div>
+    </motion.div>
+  );
+})}
+
+    {/* Container for teams #5+ */}
+    
+<div 
+className="absolute left-[1059px] top-[280px] w-[715px]">
+  <div 
+  style={{background: 'linear-gradient(to bottom right, #ffffff, #e0e0e0)', borderColor: tournament.secondaryColor}}
+  className='w-[715px] h-[30px]   text-black font-[AGENCYB] text-[20px] flex items-centee pb-[0px] mb-[55px] border-2'>
+     <div className='ml-[0px]'>SIRALAMA</div>
+    <div className='ml-[100px]'>TAKIM</div>
+<div className='ml-[280px]'>PUANI</div>
+<div className='ml-[50px]'>SKOR</div>
+<div className='ml-[35px]'>TOPLAM</div>
+
+  </div>
+  {restTeams.map((team, index) => {
+ const rankNumber = page === 'first'
+  ? 8 + index
+  : page === 'second'
+  ? 17 + index
+  : 26 + index;
+
+  return (
+    <motion.div
+      key={team._id}
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.2, duration: 1 }} // stagger effect
+      className="left-0 w-full h-[60px] flex items-center border border-white relative mb-[6px] top-[-50px]"
+      style={{ background: 'linear-gradient(to bottom right, #0f0f0f, #1f1f1f)' }}
+    >
+      {/* LEFT COLOR STRIP WITH RANK */}
+      <div
+        className="w-[59px] h-full flex items-center justify-center text-white font-[AGENCYB] text-[38px]"
+    >
+        #{rankNumber}
+      </div>
+
+      {/* TEAM LOGO */}
+      <div className="w-[50px] h-[50px] ml-4 flex-shrink-0">
+        <img src={team.teamLogo || "/def_logo.png"} alt={team.teamName} className="w-full h-full object-contain" />
+      </div>
+ 
+      {/* TEAM NAME */}
+      <div className="flex-1 text-white font-[AGENCYB] text-[38px] ml-4">
+        {team.teamName.toUpperCase()}
+      </div>
+{/* WWCD Icon */}
+      {team.placePoints === 10 && (
+        <img src="/theme4assets/chicken.png" alt="WWCD" className="w-[36px] mr-[80px]" />
+      )}
+      {/* PLACE POINTS */}
+      <div className="w-[60px] text-white font-[AGENCYB] text-[38px] text-center relative left-[-50px]">
+        {team.placePoints}
+      </div>
+
+      {/* KILLS */}
+      <div className="w-[60px] text-white font-[AGENCYB] text-[38px] text-center relative left-[-20px]">
+        {team.players.reduce((s, p) => s + (p.killNum || 0), 0)}
+      </div>
+
+      {/* TOTAL */}
+      <div className="w-[60px] text-white font-[AGENCYB] text-[38px] text-center">
+        {team.placePoints + team.players.reduce((s, p) => s + (p.killNum || 0), 0)}
+      </div>
+
+     
+    </motion.div>
+  );
+})}
+</div>
+
     </div>
   );
 };

@@ -22,6 +22,7 @@ const VIEW_GROUPS = [
       { key: 'MatchSummary', label: 'SUMMARY' }, { key: 'MatchData', label: 'DATA' },
       { key: 'MatchFragrs', label: 'FRAGS' },    { key: 'Lower', label: 'LOWER' },
       { key: 'Upper', label: 'UPPER' },           { key: 'Dom', label: 'DOM' },
+      { key: 'Achive', label: 'PLAYER SUMMARY' },
       { key: 'LiveStats', label: 'STATS' },        { key: 'LiveFrags', label: 'LIVE FRAGS' },
     ]
   },

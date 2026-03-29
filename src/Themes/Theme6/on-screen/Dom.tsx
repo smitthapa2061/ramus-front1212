@@ -1,6 +1,8 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SocketManager from '../../../dashboard/socketManager.tsx';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Tournament {
   _id: string;
@@ -27,6 +29,7 @@ interface Match {
 
 interface Player {
   _id: string;
+  teamName: string;
   playerName: string;
   killNum: number;
   bHasDied: boolean;
@@ -34,10 +37,16 @@ interface Player {
   health: number;
   healthMax: number;
   liveState: number;
+  killNumInVehicle?: number;
+  killNumByGrenade?: number;
+  gotAirDropNum?: number;
+  damage?: number;
+  maxKillDistance?: number;
 }
 
 interface Team {
   _id: string;
+  teamName: string;
   teamTag: string;
   teamId?: string;
   slot?: number;
@@ -51,6 +60,12 @@ interface MatchData {
   teams: Team[];
 }
 
+interface AlertPlayer extends Player {
+  teamTag: string;
+  teamLogo: string;
+  milestone: string;
+}
+
 interface DomProps {
   tournament: Tournament;
   round?: Round | null;
@@ -58,338 +73,465 @@ interface DomProps {
   matchData?: MatchData | null;
 }
 
-const Dom: React.FC<DomProps> = React.memo(({ tournament, round, match, matchData }) => {
-  const [localMatchData, setLocalMatchData] = useState<MatchData | null>(matchData || null);
-  const [matchDataId, setMatchDataId] = useState<string | null>(matchData?._id?.toString() || null);
-  const [isVisible, setIsVisible] = useState<boolean>(false);
-  const [displayedPlayer, setDisplayedPlayer] = useState<(Player & { teamTag: string; teamLogo: string; milestone: string }) | null>(null);
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-  // Refs to prevent loops
-  const prevDataRef = useRef<any[]>([]);
-  const prevKillsMap = useRef<{ [key: string]: number }>({});
-  const displayTimerRef = useRef<number | null>(null);
-  const firstBloodTriggered = useRef(false);
-  const previousDeadPlayersRef = useRef<Player[]>([]);
+type KillMap = Record<string, number>;
+
+function buildKillMaps(matchData: MatchData): { kills: KillMap; vehicle: KillMap; grenade: KillMap; airdrop: KillMap; damage: KillMap; distance: KillMap } {
+  const kills: KillMap = {};
+  const vehicle: KillMap = {};
+  const grenade: KillMap = {};
+  const airdrop: KillMap  = {};
+  const damage: KillMap    = {};
+  const distance: KillMap  = {};
+  for (const team of matchData.teams) {
+    for (const p of team.players) {
+      kills[p.playerName]   = p.killNum           || 0;
+      vehicle[p.playerName] = p.killNumInVehicle  || 0;
+      grenade[p.playerName] = p.killNumByGrenade  || 0;
+      airdrop[p.playerName]  = p.gotAirDropNum     || 0;
+      damage[p.playerName]    = p.damage            || 0;
+      distance[p.playerName]  = p.maxKillDistance   || 0;
+    }
+  }
+  return { kills, vehicle, grenade, airdrop, damage, distance };
+}
+
+function killFingerprint(md: MatchData): string {
+  return md.teams
+    .flatMap(t =>
+      t.players.map(p => `${p._id}:${p.killNum ?? 0}:${p.killNumInVehicle ?? 0}:${p.killNumByGrenade ?? 0}:${p.gotAirDropNum ?? 0}:${p.damage ?? 0}:${p.maxKillDistance ?? 0}`)
+    )
+    .join('|');
+}
+
+// ─── Pure alert detector — uses PRE-update snapshots ─────────────────────────
+
+function detectAlert(
+  md: MatchData,
+  snapKills: KillMap,
+  snapVehicle: KillMap,
+  snapGrenade: KillMap,
+  snapAirdrop: KillMap,
+  snapDamage: KillMap,
+  snapDistance: KillMap,
+  firstBloodDone: boolean
+): AlertPlayer | null {
+
+  // 1. First blood — killNum field
+  if (!firstBloodDone) {
+    for (const team of md.teams) {
+      for (const p of team.players) {
+        if ((p.killNum || 0) === 1 && (snapKills[p.playerName] ?? 0) === 0) {
+          return { ...p, teamTag: team.teamTag, teamLogo: team.teamLogo, milestone: 'İLK KAN' };
+        }
+      }
+    }
+  }
+
+  // 2. Kill streaks — killNum field, reverse order = most recent update
+  for (let ti = md.teams.length - 1; ti >= 0; ti--) {
+    const team = md.teams[ti];
+    for (let pi = team.players.length - 1; pi >= 0; pi--) {
+      const p    = team.players[pi];
+      const cur  = p.killNum || 0;
+      const prev = snapKills[p.playerName] ?? 0;
+      if (cur > prev) {
+        if (cur >= 8 && prev < 8) return { ...p, teamTag: team.teamTag, teamLogo: team.teamLogo, milestone: '7. SKOR' };
+        if (cur >= 5 && prev < 5) return { ...p, teamTag: team.teamTag, teamLogo: team.teamLogo, milestone: '5. SKOR' };
+        if (cur >= 3 && prev < 3) return { ...p, teamTag: team.teamTag, teamLogo: team.teamLogo, milestone: '3. SKOR' };
+      }
+    }
+  }
+
+  // 3. Vehicle elimination — killNumInVehicle field
+  for (let ti = md.teams.length - 1; ti >= 0; ti--) {
+    const team = md.teams[ti];
+    for (let pi = team.players.length - 1; pi >= 0; pi--) {
+      const p    = team.players[pi];
+      const cur  = p.killNumInVehicle || 0;
+      const prev = snapVehicle[p.playerName] ?? 0;
+      if (cur > prev) {
+        return { ...p, teamTag: team.teamTag, teamLogo: team.teamLogo, milestone: 'VEHICLE ELIM' };
+      }
+    }
+  }
+
+  // 4. Grenade elimination — killNumByGrenade field
+  for (let ti = md.teams.length - 1; ti >= 0; ti--) {
+    const team = md.teams[ti];
+    for (let pi = team.players.length - 1; pi >= 0; pi--) {
+      const p    = team.players[pi];
+      const cur  = p.killNumByGrenade || 0;
+      const prev = snapGrenade[p.playerName] ?? 0;
+      if (cur > prev) {
+        return { ...p, teamTag: team.teamTag, teamLogo: team.teamLogo, milestone: 'GRENADE ELIM' };
+      }
+    }
+  }
 
 
-  // Handle socket updates with loop prevention
-  // ✅ Ref to always hold the latest match data (no re-renders)
-const matchDataRef = useRef<MatchData | null>(matchData || null);
-useEffect(() => {
-  matchDataRef.current = localMatchData;
-}, [localMatchData]);
+  // 5. Airdrop — gotAirDropNum field — fires on every new airdrop
+  for (let ti = md.teams.length - 1; ti >= 0; ti--) {
+    const team = md.teams[ti];
+    for (let pi = team.players.length - 1; pi >= 0; pi--) {
+      const p    = team.players[pi];
+      const cur  = p.gotAirDropNum || 0;
+      const prev = snapAirdrop[p.playerName] ?? 0;
+      if (cur > prev) {
+        return { ...p, teamTag: team.teamTag, teamLogo: team.teamLogo, milestone: 'AİRDROP AÇTI' };
+      }
+    }
+  }
 
-// ✅ Socket update handler (no loop)
-const handleSocketUpdate = useCallback((data: any) => {
-  const currentData = matchDataRef.current;
-  let updatedMatchData: MatchData | null = currentData;
+  // 6. Damage milestone — damage field — fires every time player crosses 600 damage threshold
+  //    maxKillDistance is in cm, so 300m = 30000cm
+  for (let ti = md.teams.length - 1; ti >= 0; ti--) {
+    const team = md.teams[ti];
+    for (let pi = team.players.length - 1; pi >= 0; pi--) {
+      const p    = team.players[pi];
+      const cur  = p.damage || 0;
+      const prev = snapDamage[p.playerName] ?? 0;
+      // Fire each time player crosses a new 600-damage multiple
+      const curBracket  = Math.floor(cur  / 600);
+      const prevBracket = Math.floor(prev / 600);
+      if (curBracket > prevBracket && cur >= 600) {
+        return { ...p, teamTag: team.teamTag, teamLogo: team.teamLogo, milestone: '600 HASAR' };
+      }
+    }
+  }
 
+  // 7. Kill distance — maxKillDistance in CM — fires when player crosses 30000cm (300m)
+  for (let ti = md.teams.length - 1; ti >= 0; ti--) {
+    const team = md.teams[ti];
+    for (let pi = team.players.length - 1; pi >= 0; pi--) {
+      const p       = team.players[pi];
+      const curCm   = p.maxKillDistance || 0;
+      const prevCm  = snapDistance[p.playerName] ?? 0;
+      if (curCm >= 30000 && prevCm < 30000) {
+        return { ...p, teamTag: team.teamTag, teamLogo: team.teamLogo, milestone: '300m SKORU' };
+      }
+    }
+  }
+
+  return null;
+}
+
+// ─── Merge socket payload into current MatchData ──────────────────────────────
+//
+//  The backend emits these distinct shapes:
+//
+//  A) playerStatsUpdated  → { matchDataId, teamId, playerId, updates: { killNum, killNumInVehicle, killNumByGrenade, ... } }
+//  B) teamStatsUpdated    → { matchDataId, teamId, totalKills, players: [{ _id, killNum }] }   ← only killNum
+//  C) matchDataUpdated    → { matchDataId, teamId, changes: { players: [{ _id, ... }] } }
+//  D) liveMatchUpdate     → full MatchData document with _id + teams[]
+//
+function mergeSocketData(current: MatchData, data: any, matchDataId: string): MatchData | null {
+  if (!current) return null;
+
+  // ── A. playerStatsUpdated ─────────────────────────────────────────────────
+  // Shape: { matchDataId, teamId, playerId, updates }
+  // This carries killNumInVehicle + killNumByGrenade when those fields were updated.
+  if (data.matchDataId === matchDataId && data.teamId && data.playerId && data.updates) {
+    console.log('[Dom] mergeSocketData: playerStatsUpdated', data.updates);
+    return {
+      ...current,
+      teams: current.teams.map(team =>
+        team._id?.toString() === data.teamId || team.teamId?.toString() === data.teamId
+          ? {
+              ...team,
+              players: team.players.map(player =>
+                player._id?.toString() === data.playerId
+                  ? { ...player, ...data.updates }
+                  : player
+              ),
+            }
+          : team
+      ),
+    };
+  }
+
+  // ── B. teamStatsUpdated ───────────────────────────────────────────────────
+  // Shape: { matchDataId, teamId, players: [{ _id, killNum }] }
+  // Only carries killNum — skip if playerStatsUpdated already handled it.
+  if (data.matchDataId === matchDataId && data.teamId && Array.isArray(data.players)) {
+    console.log('[Dom] mergeSocketData: teamStatsUpdated');
+    return {
+      ...current,
+      teams: current.teams.map(team =>
+        team._id?.toString() === data.teamId || team.teamId?.toString() === data.teamId
+          ? {
+              ...team,
+              players: team.players.map(player => {
+                const upd = data.players.find(
+                  (p: any) => p._id?.toString() === player._id?.toString()
+                );
+                return upd ? { ...player, ...upd } : player;
+              }),
+            }
+          : team
+      ),
+    };
+  }
+
+  // ── C. matchDataUpdated changes patch ─────────────────────────────────────
+  // Shape: { matchDataId, teamId, changes: { players: [...] } }
+  if (data.matchDataId === matchDataId && data.teamId && data.changes?.players) {
+    console.log('[Dom] mergeSocketData: matchDataUpdated changes');
+    return {
+      ...current,
+      teams: current.teams.map(team =>
+        team._id?.toString() === data.teamId || team.teamId?.toString() === data.teamId
+          ? {
+              ...team,
+              players: team.players.map(player => {
+                const upd = data.changes.players.find(
+                  (p: any) => p._id?.toString() === player._id?.toString()
+                );
+                return upd ? { ...player, ...upd } : player;
+              }),
+            }
+          : team
+      ),
+    };
+  }
+
+  // ── D. Full match replace (liveMatchUpdate) ───────────────────────────────
   if (data._id?.toString() === matchDataId && data.teams) {
-    updatedMatchData = data;
-  } else if (data.matchDataId === matchDataId && data.teamId && data.players) {
-    if (currentData) {
-      updatedMatchData = {
-        ...currentData,
-        teams: currentData.teams.map(team =>
-          team._id === data.teamId || team.teamId === data.teamId
-            ? {
-                ...team,
-                players: team.players.map(player =>
-                  data.players.find((p: any) => p._id === player._id)
-                    ? { ...player, ...data.players.find((p: any) => p._id === player._id) }
-                    : player
-                )
-              }
-            : team
-        )
-      };
+    console.log('[Dom] mergeSocketData: full replace');
+    return data as MatchData;
+  }
+
+  return null;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+const DISPLAY_MS   = 6000;
+const EXIT_ANIM_MS = 600;
+
+const Dom: React.FC<DomProps> = React.memo(({ tournament, matchData }) => {
+  const [localMatchData, setLocalMatchData] = useState<MatchData | null>(matchData ?? null);
+  const [isVisible,      setIsVisible]      = useState(false);
+  const [displayedPlayer, setDisplayedPlayer] = useState<AlertPlayer | null>(null);
+
+  const matchDataId = matchData?._id?.toString() ?? null;
+
+  // Stable refs
+  const matchDataRef   = useRef<MatchData | null>(matchData ?? null);
+  const prevKillsRef   = useRef<KillMap>({});
+  const prevVehicleRef = useRef<KillMap>({});
+  const prevGrenadeRef = useRef<KillMap>({});
+  const prevAirdropRef  = useRef<KillMap>({});
+  const prevDamageRef    = useRef<KillMap>({});
+  const prevDistanceRef  = useRef<KillMap>({});
+  const firstBloodRef  = useRef(false);
+  const fingerprintRef = useRef('');
+  const timerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep matchDataRef in sync with state
+  useEffect(() => { matchDataRef.current = localMatchData; }, [localMatchData]);
+
+  // Initialise kill maps whenever the prop changes
+  useEffect(() => {
+    if (matchData) {
+      const { kills, vehicle, grenade, airdrop, damage, distance } = buildKillMaps(matchData);
+      prevKillsRef.current   = kills;
+      prevVehicleRef.current = vehicle;
+      prevGrenadeRef.current = grenade;
+      prevAirdropRef.current   = airdrop;
+      prevDamageRef.current     = damage;
+      prevDistanceRef.current   = distance;
+      fingerprintRef.current = killFingerprint(matchData);
+      matchDataRef.current   = matchData;
+      setLocalMatchData(matchData);
     }
-  } else if (data.matchDataId === matchDataId && data.teamId && data.changes?.players) {
-    if (currentData) {
-      updatedMatchData = {
-        ...currentData,
-        teams: currentData.teams.map(team =>
-          team._id === data.teamId || team.teamId === data.teamId
-            ? {
-                ...team,
-                players: team.players.map(player => {
-                  const update = data.changes.players.find((p: any) => p._id?.toString() === player._id?.toString());
-                  return update ? { ...player, ...update } : player;
-                })
-              }
-            : team
-        )
-      };
-    }
-  }
+  }, [matchData]);
 
-  if (updatedMatchData) {
-    const combinedData = updatedMatchData.teams
-      .flatMap(team => team.players.map(player => ({ _id: player._id, killNum: player.killNum || 0 })))
-      .sort((a, b) => a._id.localeCompare(b._id));
+  // Show alert banner
+  const showAlert = useCallback((player: AlertPlayer) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setDisplayedPlayer(player);
+    setIsVisible(true);
 
-    const prevDataSorted = prevDataRef.current.sort((a: any, b: any) => a._id.localeCompare(b._id));
+    timerRef.current = setTimeout(() => {
+      setIsVisible(false);
+      timerRef.current = setTimeout(() => {
+        setDisplayedPlayer(null);
+        timerRef.current = null;
+      }, EXIT_ANIM_MS + 100);
+    }, DISPLAY_MS);
+  }, []);
 
-    if (JSON.stringify(combinedData) !== JSON.stringify(prevDataSorted)) {
-      console.log("Dom: Kill data changed, updating localMatchData");
-      prevDataRef.current = combinedData;
-      setLocalMatchData(updatedMatchData);
-      matchDataRef.current = updatedMatchData; // ✅ keep ref updated
+  // Socket handler
+  const handleSocketUpdate = useCallback(
+    (data: any) => {
+      const current = matchDataRef.current;
+      if (!current || !matchDataId) return;
 
-      // Process alerts only when data changes
-      let alertData = null;
-      let triggered = false;
-      let alertReason = '';
+      const merged = mergeSocketData(current, data, matchDataId);
+      if (!merged) return;
 
-      // Log all players with changed data
-      const allPlayers = updatedMatchData.teams.flatMap(team => team.players);
-    const changedPlayers = allPlayers.filter(player => {
-  const prevKills = prevKillsMap.current[player.playerName] ?? 0;
-  return player.killNum > prevKills; // ✅ only count kill increases
-});
+      const fp = killFingerprint(merged);
+      if (fp === fingerprintRef.current) return; // nothing kill-related changed
 
+      // ── Snapshot BEFORE updating maps ──────────────────────────────────────
+      const snapKills   = { ...prevKillsRef.current };
+      const snapVehicle = { ...prevVehicleRef.current };
+      const snapGrenade = { ...prevGrenadeRef.current };
+      const snapAirdrop  = { ...prevAirdropRef.current };
+      const snapDamage    = { ...prevDamageRef.current };
+      const snapDistance  = { ...prevDistanceRef.current };
 
-      console.log("Dom: Latest player changes:");
-      changedPlayers.forEach(player => {
-        const prevKills = prevKillsMap.current[player.playerName] || 0;
-        const prevDied = previousDeadPlayersRef.current.some(p => p.playerName === player.playerName);
-        console.log(`  ${player.playerName}: kills ${prevKills} -> ${player.killNum}`);
-      });
+      // ── Update state & maps ────────────────────────────────────────────────
+      fingerprintRef.current = fp;
+      matchDataRef.current   = merged;
+      setLocalMatchData(merged);
 
-      // Check for first blood - only the first player to get their first kill gets this milestone
-      if (!firstBloodTriggered.current) {
-        for (const team of updatedMatchData.teams) {
-          for (const player of team.players) {
-            const playerName = player.playerName;
-            const currentKills = player.killNum || 0;
-            const previousKills = prevKillsMap.current[playerName] || 0;
+      const { kills, vehicle, grenade, airdrop, damage, distance } = buildKillMaps(merged);
+      prevKillsRef.current   = kills;
+      prevVehicleRef.current = vehicle;
+      prevGrenadeRef.current = grenade;
+      prevAirdropRef.current   = airdrop;
+      prevDamageRef.current     = damage;
+      prevDistanceRef.current   = distance;
 
-            if (currentKills === 1 && previousKills === 0) {
-              alertData = {
-                ...player,
-                teamTag: team.teamTag,
-                teamLogo: team.teamLogo,
-                milestone: 'İLK KAN'
-              };
-              alertReason = 'İLK KAN';
-              triggered = true;
-              firstBloodTriggered.current = true;
-              break;
-            }
-          }
-          if (triggered) break;
-        }
+      // ── Detect alert using PRE-update snapshots ────────────────────────────
+      const alert = detectAlert(merged, snapKills, snapVehicle, snapGrenade, snapAirdrop, snapDamage, snapDistance, firstBloodRef.current);
+
+      if (alert) {
+        if (alert.milestone === 'İLK KAN') firstBloodRef.current = true;
+        console.log(`[Dom] Alert: ${alert.playerName} — ${alert.milestone}`);
+        showAlert(alert);
       }
+    },
+    [matchDataId, showAlert]
+  );
 
+  // Socket subscription
+  useEffect(() => {
+    if (!matchDataId) return;
 
-      // Check for kill streaks - show the latest achievement reached (reverse order to get most recent)
-      if (!triggered) {
-        // Process teams in reverse order
-        for (let teamIndex = updatedMatchData.teams.length - 1; teamIndex >= 0; teamIndex--) {
-          const team = updatedMatchData.teams[teamIndex];
-          // Process players in reverse order
-          for (let playerIndex = team.players.length - 1; playerIndex >= 0; playerIndex--) {
-            const player = team.players[playerIndex];
-            const playerName = player.playerName;
-            const currentKills = player.killNum || 0;
-            const previousKills = prevKillsMap.current[playerName] || 0;
+    const socket = SocketManager.getInstance().connect();
+    const events = [
+      'liveMatchUpdate',
+      'matchDataUpdated',
+      'playerStatsUpdated',
+      'teamStatsUpdated',
+      'bulkTeamUpdate',
+    ];
 
-            if (currentKills > previousKills) {
-              if (currentKills >= 8 && previousKills < 8) {
-                alertData = {
-                  ...player,
-                  teamTag: team.teamTag,
-                  teamLogo: team.teamLogo,
-                  milestone: '7. SKOR'
-                };
-                alertReason = '7. SKOR';
-                triggered = true;
-                break;
-              } else if (currentKills >= 5 && previousKills < 5) {
-                alertData = {
-                  ...player,
-                  teamTag: team.teamTag,
-                  teamLogo: team.teamLogo,
-                  milestone: '5. SKOR'
-                };
-                alertReason = '5. SKOR';
-                triggered = true;
-                break;
-              } else if (currentKills >= 3 && previousKills < 3) {
-                alertData = {
-                  ...player,
-                  teamTag: team.teamTag,
-                  teamLogo: team.teamLogo,
-                  milestone: '3. SKOR'
-                };
-                alertReason = '3. SKOR';
-                triggered = true;
-                break;
-              }
-            }
-          }
-          if (triggered) break;
-        }
-      }
+    events.forEach(evt => { socket.off(evt); socket.on(evt, handleSocketUpdate); });
 
-      // Update kills map
-      updatedMatchData.teams.forEach(team => {
-        team.players.forEach(player => {
-          prevKillsMap.current[player.playerName] = player.killNum || 0;
-        });
-      });
+    return () => {
+      events.forEach(evt => socket.off(evt, handleSocketUpdate));
+      SocketManager.getInstance().disconnect();
+    };
+  }, [matchDataId, handleSocketUpdate]);
 
-      if (triggered && alertData) {
-        setDisplayedPlayer(alertData);
-        setIsVisible(true);
-        if (displayTimerRef.current) {
-          clearTimeout(displayTimerRef.current);
-        }
-        displayTimerRef.current = window.setTimeout(() => {
-          setIsVisible(false);
-          // Wait for exit animation to complete before clearing displayedPlayer
-          setTimeout(() => {
-            setDisplayedPlayer(null);
-            displayTimerRef.current = null;
-          }, 60000000);
-        }, 60000000);
-        console.log(`Dom: Triggering alert for ${alertData.playerName} - ${alertReason}`);
-      }
-    } else {
-      console.log("Dom: Kill data unchanged, skipping update");
-    }
-  }
-}, [matchDataId]); // ✅ removed localMatchData dependency
+  // Cleanup timer on unmount
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
-// ✅ Socket setup — only runs once per matchDataId
-useEffect(() => {
-  if (!matchDataId) return;
+  if (!localMatchData || !displayedPlayer) return null;
 
-  const socketManager = SocketManager.getInstance();
-  const socket = socketManager.connect();
+  const primary   = tournament.primaryColor  || '#6b21a8';
+  const secondary = tournament.secondaryColor || '#c084fc';
 
-  const events = [
-    "liveMatchUpdate",
-    "matchDataUpdated",
-    "playerStatsUpdated",
-    "teamStatsUpdated",
-    "bulkTeamUpdate",
-  ];
+  return (
+    <div className="w-[1920px] h-[1080px] text-white relative overflow-hidden">
+      <AnimatePresence>
+        {isVisible && displayedPlayer && (
+          <motion.div
+            key={displayedPlayer._id + displayedPlayer.milestone}
+            initial={{ x: '-110%', opacity: 0 }}
+            animate={{ x: 0,       opacity: 1 }}
+            exit={{    x: '-110%', opacity: 0 }}
+            transition={{ duration: 0.55, ease: [0.32, 0, 0.67, 0] }}
+            className="absolute top-[500px] left-[-10px] w-[400px] h-[450px]"
+          >
+            <div className="w-full h-full relative">
 
-  events.forEach(evt => socket.off(evt)); // clear before attach
-  events.forEach(evt => socket.on(evt, handleSocketUpdate));
-
-  return () => {
-    events.forEach(evt => socket.off(evt));
-    socketManager.disconnect();
-  };
-}, [matchDataId, handleSocketUpdate]);
-
-
-  if (!localMatchData) {
-    return null;
-  }
-
-  if (!isVisible || !displayedPlayer) {
-    return null;
-  }
-
-return (
-  <div className="w-[1920px] h-[1080px] text-white p-8 relative">
-    <AnimatePresence>
-      {isVisible && displayedPlayer && (
-        <motion.div
-          key={displayedPlayer._id}
-          initial={{ x: -600, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: -600, opacity: 0 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-          className="w-[400px] h-[450px]  absolute top-[500px] left-[-10px]"
-        >
-          <div className="w-full h-full relative">
-            
-            <div 
-              style={{
-                backgroundImage: `linear-gradient(to left top, ${tournament.primaryColor || '#6b21a8'}, ${tournament.secondaryColor || '#c084fc'}), url('https://res.cloudinary.com/dqckienxj/image/upload/v1748293303/purple-waves-light-abstract-zg_qfebgm.jpg')`,
-              }}
-              className="w-[100%] h-full "
-            />
-
-         
-            {/* Player + Background Team Logo */}
-            <div className="absolute top-[5px] w-[475px] h-[175px]">
-                 {/* Existing small team logo (UNCHANGED) */}
-            <img 
-              src={displayedPlayer.teamLogo} 
-              alt=""  
-              className='w-[80px] h-[80px] absolute top-[2px] left-[307px] flex justify-center'
-            />
-
-              {/* Background Team Logo */}
-              <img
-                src={displayedPlayer.teamLogo}
-                alt=""
-                className="absolute inset-0 w-[300px] h-[300px] grayscale opacity-30  left-[50px] top-[20px]"
+              {/* Background gradient */}
+              <div
+                style={{ backgroundImage: `linear-gradient(to left top, ${primary}, ${secondary})` }}
+                className="absolute inset-0 w-full h-full"
               />
 
-              {/* Player Image */}
-              <img
-                src={displayedPlayer.picUrl || "/def_char.avif"}
-                alt="Player or Team Logo"
-                className="w-full h-full object-contain absolute z-0 scale-[2.2] left-[-30px] top-[-10px]"
-              />
-               <div
-              className="w-[82%] h-[100%] absolute top-[270px] left-[10px] text-center"
-              style={{
-                backgroundImage: `linear-gradient(to bottom right, ${tournament.primaryColor || '#6b21a8'}, ${tournament.secondaryColor || '#c084fc'}), url('https://res.cloudinary.com/dqckienxj/image/upload/v1748293303/purple-waves-light-abstract-zg_qfebgm.jpg')`,
-              }}
-            >
-             <div
-              style={{
-      backgroundImage: `url('/theme3assets/lines.avif')`,
-      backgroundSize: '300px',
-      backgroundRepeat: 'repeat',
-      
-    }}
-             className="w-[100%] h-[25%] bg-black relative overflow-hidden " >
-  
-  
+              {/* Player + team logo layer */}
+              <div className="absolute top-[5px] w-[475px] h-[175px]">
 
+                {/* Small team logo top-right */}
+                <img
+                  src={displayedPlayer.teamLogo}
+                  alt=""
+                  className="w-[80px] h-[80px] absolute top-[2px] left-[307px]"
+                  loading="eager"
+                  decoding="async"
+                />
 
-</div>
-<div className='font-[TUNGSTEN] text-[70px]' >
-  {displayedPlayer.playerName.toUpperCase()}
-</div>
+                {/* Faded background team logo */}
+                <img
+                  src={displayedPlayer.teamLogo}
+                  alt=""
+                  className="absolute w-[300px] h-[300px] grayscale opacity-30 left-[50px] top-[20px]"
+                  loading="eager"
+                  decoding="async"
+                />
 
-              <div 
+                {/* Player image */}
+                <img
+                  src={displayedPlayer.picUrl || '/def_char.avif'}
+                  alt={displayedPlayer.playerName}
+                  className="w-full h-full object-contain absolute z-10 scale-[2.2] left-[-30px] top-[-10px]"
+                  loading="eager"
+                  decoding="async"
+                />
+
+                {/* Info panel */}
+                <div
+                  className="absolute top-[270px] left-[10px] w-[82%] h-full"
+                  style={{ backgroundImage: `linear-gradient(to bottom right, ${primary}, ${secondary})` }}
+                >
+                  {/* Team name bar */}
+                  <div
                     style={{
-      backgroundImage: `url('/theme3assets/lines.avif')`,
-      backgroundSize: '300px',
-      backgroundRepeat: 'repeat',
-      
-    }}
-              className='w-[100%] h-[25%] bg-black absolute top-[133px] font-[AGENCYB] text-[38px]'>
-                <div className='relative top-[-7px]'>  {displayedPlayer.milestone.toUpperCase()} </div>
-              
+                      backgroundImage: `url('/theme3assets/lines.avif')`,
+                      backgroundSize: '300px',
+                      backgroundRepeat: 'repeat',
+                    }}
+                    className="w-full h-[25%] bg-black relative overflow-hidden font-[AGENCYB] text-[30px] text-center"
+                  >
+                    {displayedPlayer.teamName.toUpperCase()}
+                  </div>
+
+                  {/* Player name */}
+                  <div className="font-[TUNGSTEN] text-[70px] text-center relative top-[-10px]">
+                    {displayedPlayer.playerName.toUpperCase()}
+                  </div>
+
+                  {/* Milestone bar */}
+                  <div
+                    style={{
+                      backgroundImage: `url('/theme3assets/lines.avif')`,
+                      backgroundSize: '300px',
+                      backgroundRepeat: 'repeat',
+                    }}
+                    className="w-full h-[25%] bg-black absolute top-[133px] font-[AGENCYB] text-[38px] text-center"
+                  >
+                    <div className="relative top-[-7px]">
+                      {displayedPlayer.milestone.toUpperCase()}
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
-
-            </div>
-
-         
-
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  </div>
-);
-
-
-
-
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 });
 
+Dom.displayName = 'Dom';
 export default Dom;
-
-

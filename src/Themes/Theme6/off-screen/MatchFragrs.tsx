@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import SocketManager from '../../../dashboard/socketManager.tsx';
 
 interface Tournament {
@@ -15,14 +16,13 @@ interface Round {
   _id: string;
   roundName: string;
   apiEnable?: boolean;
-  day?:string
+  day?: string;
 }
 
 interface Match {
   _id: string;
   matchName?: string;
   matchNo?: number;
-  _matchNo?: number;
 }
 
 interface Player {
@@ -34,10 +34,10 @@ interface Player {
   damage?: string | number;
   survivalTime?: number;
   assists?: number;
-  // Live stats fields
+  knockouts?: number;
   health?: number;
   healthMax?: number;
-  liveState?: number; // 0,1,2,3 = alive, 4 = knocked, 5 = dead
+  liveState?: number;
   useSmokeGrenadeNum?: number;
   useFragGrenadeNum?: number;
   useBurnGrenadeNum?: number;
@@ -66,22 +66,16 @@ interface MatchFragrsProps {
   matchData?: MatchData | null;
 }
 
-
 const MatchFragrs: React.FC<MatchFragrsProps> = ({ tournament, round, match, matchData }) => {
-   const [localMatchData, setLocalMatchData] = useState<MatchData | null>(matchData || null);
-   const [matchDataId, setMatchDataId] = useState<string | null>(matchData?._id?.toString() || null);
-   const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
-   const [dataReceived, setDataReceived] = useState<boolean>(false);
-   const [hasFetched, setHasFetched] = useState<boolean>(false);
-   const [selectedView, setSelectedView] = useState<'fragers' | 'teams'>('fragers');
+  const [localMatchData, setLocalMatchData] = useState<MatchData | null>(matchData || null);
+  const [matchDataId, setMatchDataId] = useState<string | null>(matchData?._id?.toString() || null);
+  const [dataReceived, setDataReceived] = useState<boolean>(false);
+  const [hasFetched, setHasFetched] = useState<boolean>(false);
 
   useEffect(() => {
     if (matchData && !dataReceived && !hasFetched) {
-      console.log('MatchFragrs: Received new matchData prop, updating local state');
       setLocalMatchData(matchData);
       setMatchDataId(matchData._id?.toString());
-      setLastUpdateTime(Date.now());
-      // Disconnect socket immediately after receiving prop data
       const socketManager = SocketManager.getInstance();
       socketManager.disconnect();
     }
@@ -90,23 +84,12 @@ const MatchFragrs: React.FC<MatchFragrsProps> = ({ tournament, round, match, mat
   useEffect(() => {
     if (!match?._id || !matchDataId || hasFetched) return;
 
-    console.log('Setting up socket for initial data fetch - match:', match._id, 'matchData:', matchDataId);
-
-    // Get a fresh socket connection from the manager
     const socketManager = SocketManager.getInstance();
     const freshSocket = socketManager.connect();
 
-    console.log('Socket connected:', freshSocket?.connected);
-
-    // Test socket connection
-    freshSocket.emit('test', 'MatchFragrs component connected');
-
-    // Handler for live updates - only accept first data
     const handleLiveUpdate = (data: any) => {
       if (data._id?.toString() === matchDataId && !dataReceived) {
-        console.log('MatchFragrs: Received first live data, updating and disconnecting');
         setLocalMatchData(data);
-        setLastUpdateTime(Date.now());
         setDataReceived(true);
         setHasFetched(true);
         freshSocket.off('liveMatchUpdate', handleLiveUpdate);
@@ -117,172 +100,173 @@ const MatchFragrs: React.FC<MatchFragrsProps> = ({ tournament, round, match, mat
     freshSocket.on('liveMatchUpdate', handleLiveUpdate);
 
     return () => {
-      console.log('MatchFragrs: Cleaning up socket listener');
       freshSocket.off('liveMatchUpdate', handleLiveUpdate);
-      // Don't disconnect here to avoid triggering UI changes
     };
   }, [match?._id, matchDataId, hasFetched]);
 
-  // Add effect to handle prop changes and force re-render
-  useEffect(() => {
-    if (matchData && matchData._id?.toString() !== matchDataId && !dataReceived && !hasFetched) {
-      console.log('MatchData prop changed, updating local state');
-      setLocalMatchData(matchData);
-      setMatchDataId(matchData._id?.toString());
-    }
-  }, [matchData, matchDataId, dataReceived, hasFetched]);
-
-
-
-
-  // Get top 5 players by kills, then damage, then assists - recalculated on every localMatchData change
+  // Top 5 players
   const topPlayers = useMemo(() => {
     if (!localMatchData) return [];
 
-    const allPlayers = localMatchData.teams.flatMap(team => {
-      const teamTotalKills = team.players.reduce((sum, p) => sum + (p.killNum || 0), 0);
-      return team.players.map(player => ({
+    const allPlayers = localMatchData.teams.flatMap(team =>
+      team.players.map(player => ({
         ...player,
         killNum: Number(player.killNum || 0),
-        // damage can be string or number coming from backend
-        numericDamage: Number((player as any).damage ?? 0) || 0,
-        assists: Number((player as any).assists ?? 0) || 0,
+        numericDamage: Number(player.damage ?? 0),
+        assists: Number(player.assists ?? 0),
+        knockouts: Number(player.knockouts ?? 0),
         teamTag: team.teamTag,
         teamLogo: team.teamLogo,
-        teamName :team.teamName,
+        teamName: team.teamName,
         teamPoints: team.placePoints,
-        teamTotalKills
-      }));
-    });
+      }))
+    );
 
-    const sorted = allPlayers.sort((a: any, b: any) => {
-      if (b.killNum !== a.killNum) return b.killNum - a.killNum; // priority 1: kills
-      if (b.numericDamage !== a.numericDamage) return b.numericDamage - a.numericDamage; // priority 2: damage
-      if (b.assists !== a.assists) return b.assists - a.assists; // priority 3: assists
-      return 0;
-    });
-
-    return sorted.slice(0, 5);
+    return allPlayers
+      .sort((a, b) => b.killNum - a.killNum || b.numericDamage - a.numericDamage || b.assists - a.assists)
+      .slice(0, 5);
   }, [localMatchData]);
-
 
   if (!localMatchData) {
     return (
       <div className="w-[1920px] h-[1080px] flex items-center justify-center">
-        <div className="text-white text-2xl font-[Righteous]"></div>
+        <div className="text-white text-2xl font-[AGENCYB]">No match data available</div>
       </div>
     );
   }
 
   return (
-    <div className='w-[1920px] h-[1080px] '>
+    <div className="w-[1920px] h-[1080px] relative bg-green-900">
+      {/* Header */}
       <div
         style={{
-          backgroundImage: `linear-gradient(135deg, ${
-            tournament.primaryColor || '#000'
-          }, #000)`,
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
+          color:  `${tournament.primaryColor} `,
+        
         }}
-        className="w-[1800px] h-[250px] text-[142px] font-[agencyb] absolute left-[140px]"
+        className="w-[800px] text-[100px] font-[tungsten] absolute top-[60px] text-center bg-white h-[100px] flex items-center justify-center left-[550px]"
       >
-        TOP FRAGGERS
-      </div>
-      <div
-        style={{
-          backgroundImage: `linear-gradient(135deg, ${
-            tournament.primaryColor || '#000'
-          }, #000)`,
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-        }}
-        className="text-[78px] font-[agencyb] absolute left-[1340px] top-[0px]">
-        {round?.roundName}
-      </div>
-      <div className='text-black w-[480px] h-[200px] text-[78px] font-[agencyb] absolute left-[1320px] top-[70px]'>
-        DAY {round?.day} MATCH {match?.matchNo}
+        TOP FRAGGERS - MATCH {match?.matchNo}
       </div>
 
-     
-      <div className='w-[1400px] h-[800px]  absolute left-[520px] top-[180px] flex'>
-        {topPlayers.slice(0, 4).map((player, index) => (
-          <div key={player._id} className='w-[353px] h-[110%] bg-white ml-[20px]'>
-           <div
-  style={{
-    backgroundImage: `linear-gradient(135deg, ${tournament.primaryColor || '#000'}, #000)`,
-  }}
-  className="w-full h-[400px] overflow-hidden relative rounded-lg"
->
-  <img
-    src={player?.picUrl || "/def_char.png"}
-    alt={player.playerName}
-    className="w-full h-full object-cover object-center"
-  />
-</div>
-            <div
-              style={{
-                backgroundImage: `linear-gradient(135deg, ${
-                  tournament.secondaryColor || '#000'
-                }, #000)`
-              }}
-              className='w-[99%] h-[100px] m-[2px] font-[agencyb] flex items-center justify-center'>
-              <div className='text-white text-[58px] '>{player?.playerName}</div>
-            </div>
-            <div
-              style={{
-                backgroundImage: `linear-gradient(135deg, ${
-                  tournament.primaryColor || '#000'
-                }, #000)`
-              }}
-              className='w-[99%] h-[70px] m-[2px] bg-black'>
-              <div className='text-white font-[AGENCYB] flex justify-between items-center h-[83%] text-[3rem] px-4'>
-                <div>DAMAGE</div>
-                <div>{player?.damage}</div>
-              </div>
-            </div>
-            <div
-              style={{
-                backgroundImage: `linear-gradient(135deg, ${
-                  tournament.primaryColor || '#000'
-                }, #000)`
-              }}
-              className='w-[99%] h-[70px] m-[2px] bg-black mt-[30px]'>
-              <div className='text-white font-[AGENCYB] flex justify-between items-center h-[83%] text-[3rem] px-4'>
-                <div>ELIMS</div>
-                <div>{player?.killNum}</div>
-              </div>
-            </div>
-            <div
-              style={{
-                backgroundImage: `linear-gradient(135deg, ${
-                  tournament.primaryColor || '#000'
-                }, #000)`
-              }}
-              className='w-[99%] h-[70px] m-[2px] bg-black mt-[30px]'>
-              <div className='text-white font-[AGENCYB] flex justify-between items-center h-[83%] text-[3rem] px-4'>
-                <div>THROWABLE</div>
-                <div>{(player?.useSmokeGrenadeNum || 0) + (player?.useFragGrenadeNum || 0) + (player?.useBurnGrenadeNum || 0) + (player?.useFlashGrenadeNum || 0)}</div>
-              </div>
-            </div>
-            <div
-              style={{
-                backgroundImage: `linear-gradient(135deg, ${
-                  tournament.primaryColor || '#000'
-                }, #000)`
-              }}
-              className='w-[99%] h-[70px] m-[2px] bg-black mt-[30px]'>
-              <div className='text-white font-[AGENCYB] flex justify-between items-center h-[83%] text-[3rem] px-4'>
-                <div>DAMAGE</div>
-                <div>{player?.damage}</div>
-              </div>
-            </div>
-          </div>
-        ))}
+      {/* Round */}
+      <div
+      
+        className="text-[58px] font-[agencyb] absolute  top-[150px] text-white w-[100%] flex items-center justify-center flex-col"
+      >
+        <div
+           style={{
+                backgroundImage: `linear-gradient(to bottom right, ${tournament.primaryColor}, ${tournament.secondaryColor}), url('https://res.cloudinary.com/dqckienxj/image/upload/v1748293303/purple-waves-light-abstract-zg_qfebgm.jpg')`,
+              }} className='w-[400px] text-center absolute top-[10px]'
+        >
+        {round?.roundName.toUpperCase()}
+        </div>
       </div>
+
+
+      {/* Player Cards */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 1 }}
+        className="flex flex-wrap justify-center absolute top-[280px] left-[0px] w-full  font-[AGENCYB]"
+      >
+        {topPlayers.map((player, index) => (
+          <motion.div
+            key={player._id}
+            className="relative w-[340px] h-[416px] bg-white m-4 border-2 border-gray-400"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.15 }}
+          >
+            {/* Player Image */}
+            <div className="w-full h-[340px] overflow-hidden absolute z-10">
+              <img
+                src={player.picUrl || '/def_char.avif'}
+                alt={player.playerName}
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Rank */}
+            <div className="absolute text-black text-[30px] ml-2 mt-2">#{index + 1}</div>
+
+            {/* Team Logo */}
+            {player.teamLogo && (
+              <div className="w-[70px] h-[65px] absolute right-[10px] top-[10px] z-0">
+                <img src={player.teamLogo} alt="team logo" className="w-full h-full object-cover" />
+              </div>
+            )}
+
+            {/* Team Logo Blurred Background */}
+            {player.teamLogo && (
+              <div className="h-[205px] w-[100px] absolute left-[120px] top-[120px] z-0 scale-[2.5]">
+                <img
+                  src={player.teamLogo}
+                  alt="team logo"
+                  className="w-full h-full object-contain blur-[1px] saturate-0 opacity-30"
+                />
+              </div>
+            )}
+
+            {/* Player Name */}
+            <div className="w-full bg-black h-[80px] absolute top-[280px] flex items-center justify-center z-20">
+              <div className="text-[50px]" style={{ color: tournament.primaryColor }}>
+                {player.playerName.toUpperCase()}
+              </div>
+            </div>
+
+            {/* Stats Grid */}
+            <div
+              className="bg-red-800 w-full h-[286px] absolute top-[350px] flex"
+              style={{
+                backgroundImage: `linear-gradient(to bottom right, ${tournament.primaryColor}, ${tournament.secondaryColor}), url('https://res.cloudinary.com/dqckienxj/image/upload/v1748293303/purple-waves-light-abstract-zg_qfebgm.jpg')`,
+              }}
+            >
+              <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-0 p-4 text-white text-[50px]">
+                {/* DAMAGE */}
+                <div className="flex flex-col justify-center items-center">
+                  <div className="bg-black min-w-[90px] px-4 h-[60px] flex items-center justify-center text-[44px]">
+                    {Math.floor(player.numericDamage) || '0'}
+                  </div>
+                  <div className="mt-2 text-[30px]">DAMAGE</div>
+                </div>
+
+                {/* KILLS */}
+                <div className="flex flex-col justify-center items-center">
+                  <div className="bg-black min-w-[90px] px-4 h-[60px] flex items-center justify-center text-[44px]">
+                    {player.killNum || '0'}
+                  </div>
+                  <div className="mt-2 text-[30px]">KILLS</div>
+                </div>
+
+                {/* KNOCKOUTS */}
+                <div className="flex flex-col justify-center items-center">
+                  <div className="bg-black min-w-[90px] px-4 h-[60px] flex items-center justify-center text-[36px]">
+                    {player.knockouts || '0'}
+                  </div>
+                  <div className="mt-2 text-[30px]">KNOCKOUTS</div>
+                </div>
+
+                {/* ASSISTS */}
+                <div className="flex flex-col justify-center items-center">
+                  <div className="bg-black min-w-[90px] px-4 h-[60px] flex items-center justify-center text-[36px]">
+                    {player.assists || '0'}
+                  </div>
+                  <div className="mt-2 text-[30px]">ASSISTS</div>
+                </div>
+
+                {/* Team Name Bottom Bar */}
+                <div className="bg-white w-full h-[10%] absolute left-0 bottom-0 text-black text-[20px] text-center flex items-center justify-center">
+                  {player.teamName.toUpperCase()}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </motion.div>
     </div>
   );
 };
 
-
 export default MatchFragrs;
-

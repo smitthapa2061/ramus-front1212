@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
 import SocketManager from '../../../dashboard/socketManager.tsx';
 
 interface Tournament {
@@ -52,16 +51,14 @@ interface MatchData {
   teams: Team[];
 }
 
-
 interface UpperProps {
   tournament: Tournament;
   round?: Round | null;
   match?: Match | null;
   matchData?: MatchData | null;
-  backpackInfo?: any | null;
 }
 
-const Upper: React.FC<UpperProps> = ({ tournament, round, match, matchData, backpackInfo }) => {
+const Upper: React.FC<UpperProps> = ({ tournament, round, match, matchData }) => {
   const [localMatchData, setLocalMatchData] = useState<MatchData | null>(matchData || null);
   const [matchDataId, setMatchDataId] = useState<string | null>(matchData?._id?.toString() || null);
   const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
@@ -309,7 +306,7 @@ const Upper: React.FC<UpperProps> = ({ tournament, round, match, matchData, back
     }
   }, [matchData, matchDataId]);
 
-  // Get top 5 teams by alive players
+  // Get top 5 teams by alive players - recalculated on every localMatchData change
   const topTeams = useMemo(() => {
     if (!localMatchData) return [];
 
@@ -322,8 +319,10 @@ const Upper: React.FC<UpperProps> = ({ tournament, round, match, matchData, back
         const aliveCount = team.players.filter(p => !p.bHasDied).length;
         let wwcd: number;
         if (useApiHealth) {
+          // API enabled - use health sum / 4
           wwcd = Math.round(team.players.reduce((sum, p) => sum + (p.health || 0), 0) / 4);
         } else {
+          // API disabled - count alive players (not bHasDied) * 25
           wwcd = Math.round(aliveCount * 25);
         }
         return {
@@ -333,11 +332,10 @@ const Upper: React.FC<UpperProps> = ({ tournament, round, match, matchData, back
           wwcd,
         };
       })
-      .filter(team => team.aliveCount > 0)
+      .filter(team => team.aliveCount > 0) // Only teams with alive players
       .sort((a, b) => b.aliveCount - a.aliveCount)
       .slice(0, 5);
   }, [localMatchData, lastUpdateTime, round?.apiEnable]);
-
 
   if (!localMatchData) {
     return (
@@ -347,129 +345,160 @@ const Upper: React.FC<UpperProps> = ({ tournament, round, match, matchData, back
     );
   }
 
- return (
-  <div className="w-[1920px] h-[1080px] absolute flex">
-    <motion.div
-      initial={{ opacity: 0, x: 500 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 1, delay: 1 }}
-      className="w-[210px] h-[800px] relative top-[0px]"
-    >
-      <div className="mt-[5px] flex flex-row">
-        {topTeams.map((team, index) => {
-          const hasLiveState5 =
-            team.players.length > 0 &&
-            team.players.every((p: any) => parseInt(p.liveState, 10) === 5);
+  // Upper component UI
+return (
+  <div className="w-[1920px] h-[1080px] relative ">
+    {/* Horizontal Team Cards */}
+    {topTeams.map((team, index) => {
+      const CARD_W = 330;
+      const CARD_H = 90;
+      const GAP = 30;
+      const TOTAL_W = topTeams.length * CARD_W + (topTeams.length - 1) * GAP;
+      const startX = (1920 - TOTAL_W) / 2;
+      const baseX = startX + index * (CARD_W + GAP);
+      const baseY = 40;
 
-          return (
+      const BAR_W = 14;
+      const BAR_MAX = 60;
+
+      const WWCD_BOX_WIDTH = 330;
+      const WWCD_BOX_HEIGHT = 35;
+      const wwcdWidth = Math.max(0, (team.wwcd / 100) * WWCD_BOX_WIDTH);
+
+      let wwcdColor = "#22c55e"; // default green
+      if (team.wwcd >= 75) wwcdColor = "#22c55e";
+      else if (team.wwcd >= 50) wwcdColor = "#facc15";
+      else if (team.wwcd >= 25) wwcdColor = "#f97316";
+      else wwcdColor = "#ef4444";
+
+      return (
+        <div
+          key={team._id}
+          className="absolute"
+          style={{
+            left: baseX,
+            top: baseY,
+            width: CARD_W,
+            height: CARD_H + WWCD_BOX_HEIGHT + 20, // extra space for WWCD
+          }}
+        >
+          {/* Main Card */}
+          <div
+            style={{
+              width: CARD_W,
+              height: CARD_H,
+              background: `linear-gradient(135deg, ${tournament.primaryColor || "#000"}, ${
+                tournament.secondaryColor || "#333"
+              })`,
+              position: "relative",
+            }}
+          >
+            {/* Left white strip */}
             <div
-              key={team._id}
-              style={{ marginLeft: index === 0 ? 0 : "299px" }}
-              className={`flex text-white text-[1.7rem] border-b font-bebas-neue relative team-container justify-center scale-150 top-[30px] left-[60px]`}
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                width: 7,
+                height: CARD_H,
+                backgroundColor: "#fff",
+              }}
+            />
+            {/* Right fade */}
+            <div
+              style={{
+                position: "absolute",
+                left: CARD_W * 0.55 + 16,
+                top: 0,
+                width: CARD_W * 0.4,
+                height: CARD_H,
+                background: "linear-gradient(to right, #383838, #000)",
+              }}
+            />
+            {/* Team Logo */}
+            <img
+              src={team.teamLogo}
+              alt={team.teamTag}
+              style={{
+                position: "absolute",
+                left: 12,
+                top: 15,
+                width: 60,
+                height: 60,
+                objectFit: "cover",
+              }}
+            />
+            {/* Team Tag */}
+            <span
+              style={{
+                position: "absolute",
+                left: 85,
+                top: 58 - 32, // adjust text vertical
+                fontSize: 32,
+                fontWeight: 900,
+                fontFamily: "Supermolot, sans-serif",
+                color: "white",
+              }}
             >
-              <div className="z-10">
-                {team.teamLogo && (
-                  <img
-                    src={team.teamLogo}
-                    alt={`${team.teamTag} logo`}
-                    className="absolute left-[0px] w-9 h-9"
-                    style={{ opacity: hasLiveState5 ? 0.5 : 1 }}
+              {team.teamTag}
+            </span>
+
+            {/* Player health bars */}
+            {team.players.slice(0, 4).map((player, i) => {
+              const barX = 230 + i * (BAR_W + 6);
+              const barY = 15;
+
+              const isDead = player.liveState === 5 || player.bHasDied;
+              const isKnocked = player.liveState === 4;
+              const useApi = round?.apiEnable;
+
+              let height = BAR_MAX;
+              let color = "#fff";
+
+              if (useApi) {
+                const ratio = Math.max(0, Math.min(1, player.health / (player.healthMax || 100)));
+                height = ratio * BAR_MAX;
+                color = isDead ? "#6b7280" : isKnocked ? "bg-red-500" : "#0DD10D";
+              } else {
+                color = isDead ? "#6b7280" : isKnocked ? "bg-red-500" : "#0DD10D";
+              }
+
+              return (
+                <div key={player._id}>
+                  {/* Background bar */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: barX,
+                      top: barY,
+                      width: BAR_W,
+                      height: BAR_MAX,
+                      backgroundColor: "#4b5563",
+                    }}
                   />
-                )}
-              </div>
-
-              <div
-                style={{ opacity: hasLiveState5 ? 0.7 : 1 }}
-                className="w-[130px] z-0 absolute left-[0px] bg-gradient-to-br from-[#ffffff] to-[#a5a5a5] text-black pl-[40px] text-left font-[payBack]"
-              >
-                {team.teamTag}
-              </div>
-
-              <div className="bg-[#00000086] pl-[7px] w-[80px] relative left-[130px]">
-                {team.aliveCount === 0 ? (
-                  <div className="w-[60px] flex justify-start gap-1 left-[10px] relative top-[2px] text-white font-[300]">
-                    ELIM
-                  </div>
-                ) : (
-                  <div className="w-[60px] flex justify-start gap-1 left-[10px] relative top-[-2px]">
-                    {team.players.map((p: any, idx: number) => {
-                      const health = parseInt(p.health || "0", 10);
-                      const healthMax = parseInt(p.healthMax || "100", 10);
-                      const liveState = parseInt(p.liveState, 10);
-                      const maxHeight = 36;
-
-                      let barColor = "";
-                      if ([0, 1, 2, 3].includes(liveState)) {
-                        barColor =
-                          health === healthMax
-                            ? "bg-gradient-to-r from-[#ffffff] to-[#c2c2c2]"
-                            : "bg-yellow-400";
-                      } else if (liveState === 4) {
-                        barColor = "bg-red-600";
-                      } else if (liveState === 5) {
-                        barColor = "bg-gray-700";
-                      } else {
-                        barColor = "bg-transparent";
-                      }
-
-                      const barHeight =
-                        liveState === 5 ? maxHeight : (health / healthMax) * maxHeight;
-
-                      return (
-                        <div
-                          key={idx}
-                          className="mt-[4px]"
-                          style={{
-                            width: "10px",
-                            height: `${maxHeight}px`,
-                            position: "relative",
-                            overflow: "hidden",
-                          }}
-                        >
-                          <div
-                            className={barColor}
-                            style={{
-                              opacity: hasLiveState5 ? 0.8 : 1,
-                              width: "100%",
-                              height: `${barHeight}px`,
-                              position: "absolute",
-                              bottom: 0,
-                              transition: "height 0.3s ease",
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div
-                  style={{
-                    background: `linear-gradient(to right, ${tournament.primaryColor || '#6b21a8'}, ${tournament.secondaryColor || '#c084fc'})`,
-                  }}
-                  className="bg-black w-[210px] h-[40px] absolute right-[0px] mt-[5px] flex items-center"
-                >
-                  <img
-                    className="w-[12%] absolute ml-[10px]"
-                    src="https://res.cloudinary.com/dqckienxj/image/upload/v1753647336/bullet_lpm2no.png"
-                    alt=""
+                  {/* Foreground health bar */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: barX,
+                      top: barY + (BAR_MAX - height),
+                      width: BAR_W,
+                      height: height,
+                      backgroundColor: color,
+                    }}
                   />
-                  <div className="ml-[30px] w-[1000px] left-[0px] text-white relative top-[0px] font-[payBack] flex text-[22px]">
-                    TOTAL KILLS
-                    <span className="font-[payBack] relative bg-white text-black w-[20%] text-center ml-[10px]">
-                      {team.totalKills}
-                    </span>
-                  </div>
                 </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </motion.div>
-  </div>
- );
+              );
+            })}
 
+            {/* WWCD bar */}
+          
+          </div>
+        </div>
+      );
+    })}
+  </div>
+);
 
 
 
